@@ -63,14 +63,14 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
 
   return (
     <>
-      <div className="hero-light border-b border-line px-10 py-10">
+      <div className="hero-light border-b border-line px-6 sm:px-10 py-8 sm:py-10">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Costs & payments</div>
-        <h1 className="h-display text-6xl mt-2">Where the money&apos;s going.</h1>
+        <h1 className="h-display text-4xl sm:text-6xl mt-2">Where the money&apos;s going.</h1>
       </div>
 
-      <div className="px-10 py-10 max-w-7xl space-y-12">
+      <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-7xl space-y-8 sm:space-y-12">
         {/* Summary row */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
           <div className="border border-line rounded-xl bg-paper-pure p-6">
             <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Total trip cost</div>
             <div className="font-display text-5xl mt-2">{fmtMoney(totalBudget, trip.homeCurrency)} <span className="text-sm text-ink-muted num-mono">{trip.homeCurrency}</span></div>
@@ -99,8 +99,8 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
         </div>
 
         {/* Breakdown + calendar */}
-        <div className="grid grid-cols-3 gap-8">
-          <div className="col-span-1 border border-line rounded-xl bg-paper-pure p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+          <div className="lg:col-span-1 border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
             <h3 className="font-display text-2xl mb-6">Where it goes</h3>
             <div className="flex flex-col items-center">
               <div className="donut" style={segVars as React.CSSProperties}>
@@ -127,7 +127,7 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
             </div>
           </div>
 
-          <div className="col-span-2 border border-line rounded-xl bg-paper-pure p-6">
+          <div className="lg:col-span-2 border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
             <div className="flex items-baseline justify-between mb-1">
               <h3 className="font-display text-2xl">Payment calendar</h3>
               <div className="flex items-center gap-2 text-xs text-ink-muted">
@@ -178,10 +178,11 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
 
         {/* Transactions table */}
         <div className="border border-line rounded-xl bg-paper-pure overflow-hidden">
-          <div className="px-6 py-4 border-b border-line flex items-center justify-between">
-            <h3 className="font-display text-2xl">All transactions</h3>
+          <div className="px-5 sm:px-6 py-4 border-b border-line flex items-center justify-between">
+            <h3 className="font-display text-xl sm:text-2xl">All transactions</h3>
           </div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
               <tr className="border-b border-line">
                 <th className="text-left px-6 py-3 font-medium">Date</th>
@@ -239,6 +240,7 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </>

@@ -23,13 +23,13 @@ export default async function TripSettingsPage({ params }: { params: Promise<{ t
 
   return (
     <>
-      <div className="hero-light border-b border-line px-10 py-10">
+      <div className="hero-light border-b border-line px-6 sm:px-10 py-8 sm:py-10">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Trip settings</div>
-        <h1 className="h-display text-6xl mt-2">{trip.name}.</h1>
-        <p className="text-ink-muted mt-3 max-w-xl">Edit, invite people, or remove the trip entirely.</p>
+        <h1 className="h-display text-4xl sm:text-6xl mt-2">{trip.name}.</h1>
+        <p className="text-ink-muted mt-3 max-w-xl text-sm sm:text-base">Edit, invite people, or remove the trip entirely.</p>
       </div>
 
-      <div className="px-10 py-12 max-w-3xl space-y-16">
+      <div className="px-4 sm:px-10 py-8 sm:py-12 max-w-3xl space-y-10 sm:space-y-16">
         {/* Sharing */}
         <section>
           <div className="mb-4">

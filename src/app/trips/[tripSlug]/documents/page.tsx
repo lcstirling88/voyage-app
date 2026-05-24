@@ -40,21 +40,21 @@ export default async function DocumentsPage({ params }: { params: Promise<{ trip
 
   return (
     <>
-      <div className="hero-light border-b border-line px-10 py-10">
+      <div className="hero-light border-b border-line px-6 sm:px-10 py-8 sm:py-10">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Documents</div>
-        <h1 className="h-display text-6xl mt-2">Everything in one place.</h1>
-        <p className="text-ink-muted mt-3 max-w-2xl">
-          Forward booking confirmations to <span className="num-mono text-ink">{inboxAddress}</span> — Voyage parses, files, and updates your itinerary automatically.
+        <h1 className="h-display text-4xl sm:text-6xl mt-2">Everything in one place.</h1>
+        <p className="text-ink-muted mt-3 max-w-2xl text-sm sm:text-base break-words">
+          Forward to <span className="num-mono text-ink text-xs sm:text-sm">{inboxAddress}</span> — Voyage files everything for you.
         </p>
       </div>
 
-      <div className="px-10 py-10 max-w-7xl space-y-10">
+      <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-7xl space-y-8 sm:space-y-10">
         <section>
           <div className="flex items-baseline justify-between mb-4">
             <h2 className="font-display text-2xl">Travel</h2>
             <span className="text-xs text-ink-muted">{travelDocs.length} items</span>
           </div>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {travelDocs.map((d) => {
               const Icon = categoryIcon(d.category)
               return (
@@ -85,7 +85,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ trip
             <h2 className="font-display text-2xl">Bookings &amp; vouchers</h2>
             <span className="text-xs text-ink-muted">{bookingDocs.length} items</span>
           </div>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {bookingDocs.map((d) => {
               const Icon = categoryIcon(d.category)
               return (

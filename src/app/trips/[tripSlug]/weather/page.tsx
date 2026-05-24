@@ -34,21 +34,21 @@ export default async function WeatherPage({ params }: { params: Promise<{ tripSl
 
   return (
     <>
-      <div className="hero-light border-b border-line px-10 py-10">
+      <div className="hero-light border-b border-line px-6 sm:px-10 py-8 sm:py-10">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Weather</div>
-        <h1 className="h-display text-6xl mt-2">What to expect.</h1>
-        <p className="text-ink-muted mt-3 max-w-xl">
-          Forecasts pull live nearer to your trip. For now, ten-year averages for your dates.
+        <h1 className="h-display text-4xl sm:text-6xl mt-2">What to expect.</h1>
+        <p className="text-ink-muted mt-3 max-w-xl text-sm sm:text-base">
+          Forecasts pull live nearer to your trip. For now, ten-year averages.
         </p>
       </div>
 
-      <div className="px-10 py-10 max-w-7xl space-y-10">
+      <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-7xl space-y-8 sm:space-y-10">
         <section>
           <div className="flex items-baseline justify-between mb-5">
             <h2 className="font-display text-3xl">Tokyo · Oct 8 – 11</h2>
             <span className="text-xs text-ink-muted">Sunrise 05:47 · Sunset 17:18</span>
           </div>
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {tokyoForecast.map((f) => (
               <div key={f.date} className={`border rounded-xl bg-paper-pure p-5 text-center ${f.best ? 'border-sage border-2 relative' : 'border-line'}`}>
                 {f.best && <span className="absolute -top-2 left-1/2 -translate-x-1/2 pill pill-paid">Best day</span>}
@@ -73,7 +73,7 @@ export default async function WeatherPage({ params }: { params: Promise<{ tripSl
             <h2 className="font-display text-3xl">Kyoto · Oct 12 – 17</h2>
             <span className="text-xs text-ink-muted">Maple foliage starts mid-Oct in higher temples</span>
           </div>
-          <div className="grid grid-cols-6 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
             {kyotoForecast.map((f) => (
               <div key={f.date} className="border border-line rounded-xl bg-paper-pure p-4 text-center">
                 <div className="text-xs text-ink-muted">{f.date}</div>

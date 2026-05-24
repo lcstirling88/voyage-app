@@ -47,15 +47,15 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
 
   return (
     <>
-      <div className="hero-light border-b border-line px-10 py-10">
+      <div className="hero-light border-b border-line px-6 sm:px-10 py-8 sm:py-10">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">The plan</div>
-        <h1 className="h-display text-6xl mt-2">Day by day</h1>
-        <p className="text-ink-muted mt-3 max-w-xl">
-          Ten days, four cities, sleep-walk through bamboo groves. Each item shows its booking ref, voucher and notes.
+        <h1 className="h-display text-4xl sm:text-6xl mt-2">Day by day</h1>
+        <p className="text-ink-muted mt-3 max-w-xl text-sm sm:text-base">
+          Each item shows its booking ref, voucher and notes. Forward emails to fill it out.
         </p>
       </div>
 
-      <div className="px-10 py-10 max-w-5xl space-y-12">
+      <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-5xl space-y-10 sm:space-y-12">
         {days.map((day, idx) => {
           const key = format(day, 'yyyy-MM-dd')
           const todays = dayMap.get(key) ?? []
@@ -63,29 +63,29 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
           const otherBookings = todays.filter((b) => b.type !== 'hotel')
 
           return (
-            <div key={key} className="tline pl-10">
+            <div key={key} className="tline pl-8 sm:pl-10">
               <div className="tline-dot" />
-              <div className="flex items-baseline gap-4 mb-1">
-                <span className="font-display text-4xl">Day {String(idx + 1).padStart(2, '0')}</span>
-                <span className="text-ink-muted text-sm">{format(day, 'EEEE, MMM d')}</span>
+              <div className="flex flex-wrap items-baseline gap-2 sm:gap-4 mb-1">
+                <span className="font-display text-3xl sm:text-4xl">Day {String(idx + 1).padStart(2, '0')}</span>
+                <span className="text-ink-muted text-xs sm:text-sm">{format(day, 'EEEE, MMM d')}</span>
               </div>
 
               {hotelToday && (() => {
                 const meta = safeJson<Record<string, string>>(hotelToday.metadata)
                 return (
                   <div className="border border-line rounded-xl bg-paper-pure overflow-hidden mb-4 mt-4">
-                    <div className="flex">
-                      <div className={`w-40 ${imgForBooking(hotelToday.type, hotelToday.title)} shrink-0 relative`}>
+                    <div className="flex flex-col sm:flex-row">
+                      <div className={`h-24 sm:h-auto sm:w-40 ${imgForBooking(hotelToday.type, hotelToday.title)} shrink-0 relative`}>
                         <div className="absolute bottom-2 left-2 text-paper-pure text-[10px] uppercase tracking-[0.18em] bg-ink/40 backdrop-blur px-2 py-1 rounded">Tonight</div>
                       </div>
-                      <div className="p-5 flex-1">
-                        <div className="flex items-start justify-between">
-                          <div>
+                      <div className="p-4 sm:p-5 flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
                             <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Hotel · {meta?.nights ?? '?'} {Number(meta?.nights) === 1 ? 'night' : 'nights'}</div>
-                            <h3 className="font-display text-2xl mt-1">{hotelToday.title}</h3>
-                            {hotelToday.address && <p className="text-sm text-ink-muted mt-1">{hotelToday.address}</p>}
+                            <h3 className="font-display text-xl sm:text-2xl mt-1">{hotelToday.title}</h3>
+                            {hotelToday.address && <p className="text-xs sm:text-sm text-ink-muted mt-1">{hotelToday.address}</p>}
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 shrink-0">
                             {hotelToday.paid ? (
                               <span className="pill pill-paid"><Check className="w-3 h-3" /> Paid</span>
                             ) : (
@@ -94,11 +94,11 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
                             <InlineDeleteButton kind="booking" id={hotelToday.id} tripSlug={trip.slug} />
                           </div>
                         </div>
-                        <div className="grid grid-cols-4 gap-4 mt-4 text-xs">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-4 text-xs">
                           <div><div className="text-ink-muted">Check-in</div><div className="font-medium mt-0.5">{meta?.checkIn ?? '—'}</div></div>
                           <div><div className="text-ink-muted">Check-out</div><div className="font-medium mt-0.5">{meta?.checkOut ?? '—'}</div></div>
-                          <div><div className="text-ink-muted">Breakfast</div><div className="font-medium mt-0.5 text-sage">{meta?.breakfast ?? '—'}</div></div>
-                          <div><div className="text-ink-muted">Confirmation</div><div className="font-medium mt-0.5 num-mono">{hotelToday.confirmationCode ?? '—'}</div></div>
+                          <div><div className="text-ink-muted">Breakfast</div><div className="font-medium mt-0.5 text-sage truncate">{meta?.breakfast ?? '—'}</div></div>
+                          <div><div className="text-ink-muted">Confirmation</div><div className="font-medium mt-0.5 num-mono truncate">{hotelToday.confirmationCode ?? '—'}</div></div>
                         </div>
                       </div>
                     </div>
@@ -108,20 +108,19 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
 
               <div className="space-y-3">
                 {otherBookings.map((b) => (
-                  <div key={b.id} className="border border-line rounded-lg p-4 bg-paper-pure flex items-center gap-4">
-                    <div className="w-12 text-center">
+                  <div key={b.id} className="border border-line rounded-lg p-3 sm:p-4 bg-paper-pure flex items-center gap-3 sm:gap-4">
+                    <div className="w-10 sm:w-12 text-center shrink-0">
                       <div className="num-mono text-xs text-ink-muted">{fmtTime(b.startAt)}</div>
                     </div>
-                    <div className="w-px h-12 bg-line" />
-                    <div className={`w-12 h-12 rounded-md ${imgForBooking(b.type, b.title)} shrink-0 grid place-items-center`}>
-                      {b.type === 'restaurant' && <Utensils className="w-5 h-5 text-paper-pure" />}
-                      {b.type === 'flight' && <PlaneLanding className="w-5 h-5 text-paper-pure" />}
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-md ${imgForBooking(b.type, b.title)} shrink-0 grid place-items-center`}>
+                      {b.type === 'restaurant' && <Utensils className="w-4 h-4 sm:w-5 sm:h-5 text-paper-pure" />}
+                      {b.type === 'flight' && <PlaneLanding className="w-4 h-4 sm:w-5 sm:h-5 text-paper-pure" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{b.title}</div>
+                      <div className="font-medium truncate text-sm sm:text-base">{b.title}</div>
                       {b.notes && <div className="text-xs text-ink-muted truncate">{b.notes}</div>}
                       {b.confirmationCode && (
-                        <div className="text-xs num-mono text-ink-muted mt-0.5">{b.confirmationCode}{b.cost ? ` · ${fmtMoneyFull(b.cost, b.currency ?? trip.homeCurrency)}` : ''}</div>
+                        <div className="text-xs num-mono text-ink-muted mt-0.5 truncate">{b.confirmationCode}{b.cost ? ` · ${fmtMoneyFull(b.cost, b.currency ?? trip.homeCurrency)}` : ''}</div>
                       )}
                     </div>
                     {b.paid ? (

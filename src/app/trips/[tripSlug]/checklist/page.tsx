@@ -56,13 +56,13 @@ export default async function ChecklistPage({ params }: { params: Promise<{ trip
 
   return (
     <>
-      <div className="hero-light border-b border-line px-10 py-10">
+      <div className="hero-light border-b border-line px-6 sm:px-10 py-8 sm:py-10">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Checklist</div>
-        <h1 className="h-display text-6xl mt-2">Don&apos;t forget.</h1>
+        <h1 className="h-display text-4xl sm:text-6xl mt-2">Don&apos;t forget.</h1>
       </div>
 
-      <div className="px-10 py-10 max-w-7xl grid grid-cols-3 gap-8">
-        <div className="col-span-2 space-y-6">
+      <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-7xl grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+        <div className="lg:col-span-2 space-y-6">
           <section>
             <h2 className="font-display text-2xl mb-4">Pre-trip · by date</h2>
             <div className="border border-line rounded-xl bg-paper-pure overflow-hidden divide-y divide-line">

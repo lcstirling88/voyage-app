@@ -62,7 +62,7 @@ export default async function AssistantPage({ params }: { params: Promise<{ trip
           ))}
         </aside>
 
-        <div className="col-span-3 border border-line rounded-xl bg-paper-pure flex flex-col h-[640px]">
+        <div className="lg:col-span-3 border border-line rounded-xl bg-paper-pure flex flex-col h-[560px] sm:h-[640px]">
           <div className="flex-1 overflow-y-auto p-6 space-y-5">
             <div className="flex gap-3 max-w-xl">
               <div className="w-8 h-8 rounded-full bg-sage grid place-items-center shrink-0">

@@ -21,22 +21,22 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
 
   return (
     <>
-      <div className="hero-light border-b border-line px-10 py-10">
+      <div className="hero-light border-b border-line px-6 sm:px-10 py-8 sm:py-10">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Inbox</div>
-        <h1 className="h-display text-6xl mt-2">Forward your bookings.</h1>
-        <p className="text-ink-muted mt-3 max-w-2xl">
-          Each trip has a unique address. Forward any booking confirmation, voucher, or itinerary email there and Voyage will read it, file it, and update your itinerary.
+        <h1 className="h-display text-4xl sm:text-6xl mt-2">Forward your bookings.</h1>
+        <p className="text-ink-muted mt-3 max-w-2xl text-sm sm:text-base">
+          Forward any confirmation, voucher, or itinerary email. Voyage parses, files, and updates your itinerary.
         </p>
 
-        <div className="mt-6 inline-flex items-center gap-3 px-4 py-3 bg-paper-pure border border-line rounded-lg">
-          <Mail className="w-4 h-4 text-sage" />
-          <code className="num-mono text-sm">{inboxAddress}</code>
-          <button className="text-ink-muted hover:text-ink" title="Copy"><Copy className="w-4 h-4" /></button>
+        <div className="mt-6 flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 bg-paper-pure border border-line rounded-lg max-w-full overflow-hidden">
+          <Mail className="w-4 h-4 text-sage shrink-0" />
+          <code className="num-mono text-xs sm:text-sm break-all">{inboxAddress}</code>
+          <button className="text-ink-muted hover:text-ink shrink-0" title="Copy"><Copy className="w-4 h-4" /></button>
         </div>
       </div>
 
-      <div className="px-10 py-10 max-w-7xl grid grid-cols-3 gap-8">
-        <section className="col-span-2 border border-line rounded-xl bg-paper-pure p-6">
+      <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-7xl grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+        <section className="lg:col-span-2 border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
           <div className="flex items-baseline justify-between mb-5">
             <h2 className="font-display text-2xl">Test the parser</h2>
             <span className="text-xs text-ink-muted">Paste any booking email to see it parsed and filed</span>
@@ -77,10 +77,10 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
           </div>
         </aside>
 
-        <section className="col-span-3 border border-line rounded-xl bg-paper-pure overflow-hidden">
-          <div className="px-6 py-4 border-b border-line flex items-center gap-3">
+        <section className="lg:col-span-3 border border-line rounded-xl bg-paper-pure overflow-hidden">
+          <div className="px-5 sm:px-6 py-4 border-b border-line flex items-center gap-3">
             <InboxIcon className="w-4 h-4 text-ink-muted" />
-            <h2 className="font-display text-2xl flex-1">Recent emails</h2>
+            <h2 className="font-display text-xl sm:text-2xl flex-1">Recent emails</h2>
             <span className="text-xs text-ink-muted">{emails.length} total</span>
           </div>
           {emails.length === 0 ? (
@@ -89,7 +89,8 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
               <div className="text-sm">No emails yet. Paste a sample above to see the parser in action.</div>
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
               <thead className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
                 <tr className="border-b border-line">
                   <th className="text-left px-6 py-3 font-medium">Received</th>
@@ -119,6 +120,7 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </section>
       </div>

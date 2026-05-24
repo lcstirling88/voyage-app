@@ -96,7 +96,7 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
           </div>
         </div>
 
-        <section className="grid grid-cols-2 gap-5">
+        <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
           <div className="col-span-2">
             <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Trip name *</label>
             <input className="input mt-1.5 text-2xl font-display" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} />

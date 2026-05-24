@@ -74,9 +74,9 @@ export default async function LocalPage({ params }: { params: Promise<{ tripSlug
             </ul>
           </div>
 
-          <div className="col-span-2 border border-line rounded-xl bg-paper-pure p-6">
+          <div className="sm:col-span-2 border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
             <h3 className="font-display text-2xl mb-4">Useful phrases</h3>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
               {[
                 ['Sumimasen', 'Excuse me / Sorry'],
                 ['Arigatou gozaimasu', 'Thank you (formal)'],
