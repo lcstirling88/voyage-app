@@ -1,0 +1,260 @@
+// Voyage — travel itinerary app
+// Postgres (Neon) for production; local dev uses the same DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// Auth.js models (https://authjs.dev/getting-started/adapters/prisma)
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+
+  accounts    Account[]
+  sessions    Session[]
+  memberships Membership[]
+  invitesSent Invitation[] @relation("InvitesSent")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================================================
+// Voyage domain models
+// ============================================================================
+
+model Trip {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  tagline       String?
+  destination   String
+  themeKey      String   @default("default")
+  startDate     DateTime
+  endDate       DateTime
+  homeCurrency  String   @default("AUD")
+  inboxToken    String   @unique
+  travelerNames String?
+  departureCity String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cities         City[]
+  bookings       Booking[]
+  documents      Document[]
+  payments       Payment[]
+  checklistItems ChecklistItem[]
+  emails         IncomingEmail[]
+  memberships    Membership[]
+  invitations    Invitation[]
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  tripId    String
+  userId    String
+  role      String   @default("editor") // 'owner' | 'editor'
+  createdAt DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, userId])
+  @@index([userId])
+  @@index([tripId])
+}
+
+model Invitation {
+  id        String   @id @default(cuid())
+  tripId    String
+  email     String
+  invitedBy String
+  role      String   @default("editor")
+  token     String   @unique
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+
+  trip   Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  sender User @relation("InvitesSent", fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@index([email])
+}
+
+model City {
+  id           String   @id @default(cuid())
+  tripId       String
+  name         String
+  country      String
+  arriveOn     DateTime
+  leaveOn      DateTime
+  lat          Float?
+  lng          Float?
+  displayOrder Int      @default(0)
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  @@index([tripId])
+}
+
+model Booking {
+  id               String    @id @default(cuid())
+  tripId           String
+  type             String
+  title            String
+  vendor           String?
+  startAt          DateTime
+  endAt            DateTime?
+  location         String?
+  address          String?
+  confirmationCode String?
+  notes            String?
+  cost             Float?
+  currency         String?
+  paid             Boolean   @default(false)
+  paidAt           DateTime?
+  paymentMethod    String?
+  metadata         String?
+  sourceEmailId    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  trip        Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  sourceEmail IncomingEmail? @relation(fields: [sourceEmailId], references: [id], onDelete: SetNull)
+
+  @@index([tripId])
+  @@index([startAt])
+}
+
+model Document {
+  id            String   @id @default(cuid())
+  tripId        String
+  category      String
+  title         String
+  filename      String?
+  mimeType      String?
+  storagePath   String?
+  notes         String?
+  sourceEmailId String?
+  createdAt     DateTime @default(now())
+
+  trip        Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  sourceEmail IncomingEmail? @relation(fields: [sourceEmailId], references: [id], onDelete: SetNull)
+
+  @@index([tripId])
+}
+
+model Payment {
+  id            String    @id @default(cuid())
+  tripId        String
+  bookingId     String?
+  description   String
+  amount        Float
+  currency      String
+  dueDate       DateTime
+  autoPay       Boolean   @default(false)
+  paymentMethod String?
+  paid          Boolean   @default(false)
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@index([dueDate])
+}
+
+model ChecklistItem {
+  id        String    @id @default(cuid())
+  tripId    String
+  section   String
+  category  String?
+  text      String
+  done      Boolean   @default(false)
+  doneAt    DateTime?
+  position  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  @@index([tripId])
+}
+
+model IncomingEmail {
+  id            String   @id @default(cuid())
+  tripId        String?
+  fromAddress   String
+  toAddress     String
+  subject       String
+  textBody      String?
+  htmlBody      String?
+  receivedAt    DateTime @default(now())
+  processed     Boolean  @default(false)
+  parsedSummary String?
+  parsedJson    String?
+  errorMsg      String?
+
+  trip        Trip?             @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  attachments EmailAttachment[]
+  bookings    Booking[]
+  documents   Document[]
+
+  @@index([tripId])
+  @@index([receivedAt])
+}
+
+model EmailAttachment {
+  id          String @id @default(cuid())
+  emailId     String
+  filename    String
+  mimeType    String
+  storagePath String
+  size        Int
+
+  email IncomingEmail @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  @@index([emailId])
+}

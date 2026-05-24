@@ -1,0 +1,93 @@
+import Link from 'next/link'
+import { Plus } from 'lucide-react'
+import { prisma } from '@/lib/db'
+import { requireUser } from '@/lib/session'
+import { fmtDateRange, daysUntil } from '@/lib/format'
+import { getTheme } from '@/lib/theme'
+
+export default async function TripsListPage() {
+  const user = await requireUser()
+
+  // Only show trips where this user is a member
+  const trips = await prisma.trip.findMany({
+    where: { memberships: { some: { userId: user.id } } },
+    orderBy: { startDate: 'asc' },
+    include: {
+      cities: { orderBy: { displayOrder: 'asc' } },
+      memberships: { include: { user: true } },
+    },
+  })
+
+  return (
+    <main className="min-h-screen px-10 py-16 max-w-5xl mx-auto">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Voyage</div>
+          <h1 className="h-display text-6xl mt-2">Your trips.</h1>
+          <p className="text-ink-muted mt-3 max-w-xl">Every flight, hotel, activity and document — gathered, parsed, and ready.</p>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Signed in as</div>
+          <div className="text-sm text-ink">{user.email}</div>
+          <form action={async () => { 'use server'; const { signOut } = await import('@/lib/auth'); await signOut({ redirectTo: '/signin' }) }}>
+            <button className="text-xs text-ink-muted ulink mt-1">Sign out</button>
+          </form>
+        </div>
+      </div>
+
+      <div className="mt-12 space-y-4">
+        {trips.length === 0 && (
+          <div className="border-2 border-dashed border-line rounded-xl bg-paper/40 p-12 text-center">
+            <div className="text-ink-muted text-sm">No trips yet. Plan one to get started.</div>
+          </div>
+        )}
+
+        {trips.map((trip) => {
+          const theme = getTheme(trip.themeKey)
+          const cityNames = trip.cities.map((c) => c.name).filter((n, i, a) => a.indexOf(n) === i)
+          const sharedWith = trip.memberships.filter((m) => m.userId !== user.id)
+          return (
+            <Link
+              key={trip.id}
+              href={`/trips/${trip.slug}/overview`}
+              className="block border border-line rounded-xl bg-paper-pure overflow-hidden hover:shadow-soft transition"
+            >
+              <div className="flex">
+                <div className="w-48 shrink-0 relative" style={{ background: theme.heroGradient }}>
+                  {theme.motif && (
+                    <span className="absolute bottom-3 left-3 text-paper-pure/80 text-[10px] uppercase tracking-[0.22em]">
+                      {theme.motif} · {theme.scriptLine ?? trip.destination}
+                    </span>
+                  )}
+                </div>
+                <div className="p-6 flex-1">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">{trip.destination}</div>
+                  <h2 className="font-display text-3xl mt-1">{trip.name}</h2>
+                  {trip.tagline && <p className="text-sm text-ink-muted italic mt-1 max-w-2xl">{trip.tagline}</p>}
+                  <div className="mt-4 flex gap-8 text-xs text-ink-muted">
+                    <div><div className="uppercase tracking-wider text-[10px]">When</div><div className="text-ink mt-0.5">{fmtDateRange(trip.startDate, trip.endDate)}</div></div>
+                    <div><div className="uppercase tracking-wider text-[10px]">Countdown</div><div className="text-ink mt-0.5 num-mono">{daysUntil(trip.startDate)} days</div></div>
+                    {cityNames.length > 0 && (
+                      <div><div className="uppercase tracking-wider text-[10px]">Cities</div><div className="text-ink mt-0.5">{cityNames.join(' · ')}</div></div>
+                    )}
+                    {sharedWith.length > 0 && (
+                      <div><div className="uppercase tracking-wider text-[10px]">Shared with</div><div className="text-ink mt-0.5">{sharedWith.map((m) => m.user.name ?? m.user.email).join(', ')}</div></div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Link>
+          )
+        })}
+
+        <Link
+          href="/trips/new"
+          className="block w-full border-2 border-dashed border-line rounded-xl bg-paper/40 hover:bg-paper-pure p-12 text-ink-muted hover:text-ink transition text-center"
+        >
+          <Plus className="w-5 h-5 inline mr-2" />
+          Plan a new trip
+        </Link>
+      </div>
+    </main>
+  )
+}

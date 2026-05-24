@@ -1,0 +1,246 @@
+import { notFound } from 'next/navigation'
+import { Check, Clock, AlertCircle, Zap } from 'lucide-react'
+import { prisma } from '@/lib/db'
+import { fmtDate, fmtMoney } from '@/lib/format'
+import { startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from 'date-fns'
+import { InlineDeleteButton } from '@/components/InlineDeleteButton'
+
+export default async function CostsPage({ params }: { params: Promise<{ tripSlug: string }> }) {
+  const { tripSlug } = await params
+  const trip = await prisma.trip.findUnique({
+    where: { slug: tripSlug },
+    include: { bookings: true, payments: { orderBy: { dueDate: 'asc' } } },
+  })
+  if (!trip) notFound()
+
+  const totalBudget = trip.bookings.reduce((s, b) => s + (b.cost ?? 0), 0)
+  const paid = trip.bookings.filter((b) => b.paid).reduce((s, b) => s + (b.cost ?? 0), 0)
+  const upcoming = totalBudget - paid
+  const paidPct = totalBudget ? (paid / totalBudget) * 100 : 0
+  const days = (trip.endDate.getTime() - trip.startDate.getTime()) / 86_400_000 || 1
+  const perDay = totalBudget / days
+  const pax = (trip.travelerNames?.split(',').length ?? 1)
+
+  // Category breakdown
+  const byCat: Record<string, number> = {}
+  for (const b of trip.bookings) {
+    const key = b.type === 'hotel' ? 'Lodging'
+      : b.type === 'flight' ? 'Flights'
+      : b.type === 'restaurant' ? 'Food & dining'
+      : b.type === 'activity' ? 'Activities'
+      : 'Transit & misc'
+    byCat[key] = (byCat[key] ?? 0) + (b.cost ?? 0)
+  }
+  const catColors: Record<string, string> = {
+    'Lodging': 'bg-sage',
+    'Flights': 'bg-gold',
+    'Food & dining': 'bg-sakura',
+    'Activities': 'bg-wine',
+    'Transit & misc': 'bg-sage-dark',
+  }
+  // Donut conic-gradient cumulative stops. With no bookings, fall back to a single neutral wedge.
+  const segVars: Record<string, string> = {}
+  if (totalBudget > 0) {
+    let cum = 0
+    for (const key of Object.keys(catColors)) {
+      cum += ((byCat[key] ?? 0) / totalBudget) * 100
+      segVars[`--seg${Object.keys(catColors).indexOf(key) + 1}`] = `${cum}%`
+    }
+  } else {
+    segVars['--seg1'] = '100%'
+    segVars['--seg2'] = '100%'
+    segVars['--seg3'] = '100%'
+    segVars['--seg4'] = '100%'
+  }
+
+  // Calendar for the month of the next payment (or trip month)
+  const monthDate = trip.payments.find((p) => !p.paid)?.dueDate ?? trip.startDate
+  const monthStart = startOfMonth(monthDate)
+  const monthEnd = endOfMonth(monthDate)
+  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd })
+  const firstDow = getDay(monthStart) // 0=Sun
+  const leadingBlanks = (firstDow + 6) % 7 // make Monday = 0
+
+  return (
+    <>
+      <div className="hero-light border-b border-line px-10 py-10">
+        <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Costs & payments</div>
+        <h1 className="h-display text-6xl mt-2">Where the money&apos;s going.</h1>
+      </div>
+
+      <div className="px-10 py-10 max-w-7xl space-y-12">
+        {/* Summary row */}
+        <div className="grid grid-cols-3 gap-6">
+          <div className="border border-line rounded-xl bg-paper-pure p-6">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Total trip cost</div>
+            <div className="font-display text-5xl mt-2">{fmtMoney(totalBudget, trip.homeCurrency)} <span className="text-sm text-ink-muted num-mono">{trip.homeCurrency}</span></div>
+            <div className="h-1 bg-line-soft rounded-full mt-5 overflow-hidden">
+              <div className="h-full bg-sage" style={{ width: `${paidPct}%` }} />
+            </div>
+            <div className="flex justify-between text-xs mt-2">
+              <span className="text-sage">{fmtMoney(paid, trip.homeCurrency)} paid</span>
+              <span className="text-ink-muted">{fmtMoney(upcoming, trip.homeCurrency)} to go</span>
+            </div>
+          </div>
+          <div className="border border-line rounded-xl bg-paper-pure p-6">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Cost per day</div>
+            <div className="font-display text-5xl mt-2">{fmtMoney(Math.round(perDay), trip.homeCurrency)}</div>
+            <div className="text-xs text-ink-muted mt-2">across {Math.round(days)} days, {pax} travellers</div>
+            <div className="mt-5 text-xs space-y-1">
+              <div className="flex justify-between"><span className="text-ink-muted">Per person / day</span><span className="num-mono">{fmtMoney(Math.round(perDay / pax), trip.homeCurrency)}</span></div>
+            </div>
+          </div>
+          <div className="border border-line rounded-xl bg-paper-pure p-6">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Daily food budget left</div>
+            <div className="font-display text-5xl mt-2">$120 <span className="text-sm text-ink-muted">/ day</span></div>
+            <div className="text-xs text-ink-muted mt-2">excludes pre-booked meals</div>
+            <button className="mt-5 text-xs ulink text-sage font-medium">Log a meal expense →</button>
+          </div>
+        </div>
+
+        {/* Breakdown + calendar */}
+        <div className="grid grid-cols-3 gap-8">
+          <div className="col-span-1 border border-line rounded-xl bg-paper-pure p-6">
+            <h3 className="font-display text-2xl mb-6">Where it goes</h3>
+            <div className="flex flex-col items-center">
+              <div className="donut" style={segVars as React.CSSProperties}>
+                <div>
+                  <div className="text-center">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Total</div>
+                    <div className="font-display text-2xl">{fmtMoney(totalBudget, trip.homeCurrency)}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-2 mt-6 w-full text-xs">
+                {totalBudget === 0 ? (
+                  <div className="text-ink-muted text-center py-2 italic">
+                    Forward a booking to see the breakdown.
+                  </div>
+                ) : Object.entries(byCat).map(([key, val]) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className={`w-3 h-3 rounded-sm ${catColors[key]}`} />
+                    <span className="flex-1">{key}</span>
+                    <span className="num-mono">{Math.round((val / totalBudget) * 100)}% · {fmtMoney(val, trip.homeCurrency)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="col-span-2 border border-line rounded-xl bg-paper-pure p-6">
+            <div className="flex items-baseline justify-between mb-1">
+              <h3 className="font-display text-2xl">Payment calendar</h3>
+              <div className="flex items-center gap-2 text-xs text-ink-muted">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sage" />Paid</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gold" />Auto</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rust" />Action</span>
+              </div>
+            </div>
+            <p className="text-xs text-ink-muted mb-5">{fmtDate(monthStart, 'MMMM yyyy')}</p>
+            <div className="grid grid-cols-7 gap-1 text-xs text-ink-muted mb-2">
+              {['M','T','W','T','F','S','S'].map((d, i) => <div key={i} className="text-center">{d}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {Array.from({ length: leadingBlanks }).map((_, i) => (
+                <div key={`blank-${i}`} className="aspect-square rounded-md border border-line/40 bg-paper/30" />
+              ))}
+              {monthDays.map((d) => {
+                const due = trip.payments.find((p) => isSameDay(p.dueDate, d))
+                const cls = due
+                  ? due.autoPay ? 'border-2 border-gold bg-gold-soft' : 'border-2 border-rust bg-sakura-soft'
+                  : 'border border-line/40'
+                return (
+                  <div key={d.toISOString()} className={`aspect-square rounded-md p-1.5 text-xs relative ${cls}`}>
+                    {d.getDate()}
+                    {due && (
+                      <span className={`absolute bottom-1 right-1 num-mono text-[9px] ${due.autoPay ? 'text-gold' : 'text-rust'}`}>
+                        ${Math.round(due.amount / 100) / 10}k
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="mt-6 space-y-2">
+              <div className="text-xs text-ink-muted">Upcoming</div>
+              {trip.payments.filter((p) => !p.paid).map((p) => (
+                <div key={p.id} className="flex items-center gap-3 text-sm p-2 hover:bg-line-soft rounded">
+                  <span className={`w-2 h-2 rounded-full ${p.autoPay ? 'bg-gold' : 'bg-rust'}`} />
+                  <span className="flex-1">{p.description}</span>
+                  <span className="text-ink-muted text-xs">{fmtDate(p.dueDate)}</span>
+                  <span className="num-mono">{fmtMoney(p.amount, p.currency)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Transactions table */}
+        <div className="border border-line rounded-xl bg-paper-pure overflow-hidden">
+          <div className="px-6 py-4 border-b border-line flex items-center justify-between">
+            <h3 className="font-display text-2xl">All transactions</h3>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+              <tr className="border-b border-line">
+                <th className="text-left px-6 py-3 font-medium">Date</th>
+                <th className="text-left px-6 py-3 font-medium">Item</th>
+                <th className="text-left px-6 py-3 font-medium">Category</th>
+                <th className="text-right px-6 py-3 font-medium">Amount ({trip.homeCurrency})</th>
+                <th className="text-right px-6 py-3 font-medium pr-6">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {trip.bookings.filter((b) => b.cost != null).length === 0 && trip.payments.length === 0 && (
+                <tr><td colSpan={5} className="px-6 py-12 text-center text-ink-muted text-sm italic">
+                  No transactions yet. Forward booking emails to your trip inbox and they&apos;ll appear here.
+                </td></tr>
+              )}
+              {trip.bookings.filter((b) => b.cost != null).sort((a, b) => (a.paidAt?.getTime() ?? a.startAt.getTime()) - (b.paidAt?.getTime() ?? b.startAt.getTime())).map((b) => (
+                <tr key={b.id} className="hover:bg-line-soft/40">
+                  <td className="px-6 py-3 num-mono text-ink-muted">{b.paidAt ? fmtDate(b.paidAt) : 'TBC'}</td>
+                  <td className="px-6 py-3">{b.title}</td>
+                  <td className="px-6 py-3 text-ink-muted">{b.type}</td>
+                  <td className="px-6 py-3 text-right num-mono">{fmtMoney(b.cost!, b.currency ?? trip.homeCurrency)}</td>
+                  <td className="px-6 py-3 text-right pr-6">
+                    <div className="inline-flex items-center gap-2">
+                      {b.paid ? (
+                        <span className="pill pill-paid"><Check className="w-3 h-3" />Paid</span>
+                      ) : b.paymentMethod === 'Pay at venue' ? (
+                        <span className="pill pill-upcoming"><Clock className="w-3 h-3" />At venue</span>
+                      ) : (
+                        <span className="pill pill-upcoming"><Clock className="w-3 h-3" />Pending</span>
+                      )}
+                      <InlineDeleteButton kind="booking" id={b.id} tripSlug={trip.slug} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {trip.payments.map((p) => (
+                <tr key={p.id} className={`hover:bg-line-soft/40 ${p.autoPay ? 'bg-gold-soft/20' : 'bg-sakura-soft/20'}`}>
+                  <td className="px-6 py-3 num-mono text-ink-muted">{fmtDate(p.dueDate)}</td>
+                  <td className="px-6 py-3 font-medium">{p.description}</td>
+                  <td className="px-6 py-3 text-ink-muted">Scheduled</td>
+                  <td className="px-6 py-3 text-right num-mono">{fmtMoney(p.amount, p.currency)}</td>
+                  <td className="px-6 py-3 text-right pr-6">
+                    <div className="inline-flex items-center gap-2">
+                      {p.paid ? (
+                        <span className="pill pill-paid"><Check className="w-3 h-3" />Paid</span>
+                      ) : p.autoPay ? (
+                        <span className="pill pill-auto"><Zap className="w-3 h-3" />Auto · {p.paymentMethod}</span>
+                      ) : (
+                        <span className="pill pill-overdue"><AlertCircle className="w-3 h-3" />Action needed</span>
+                      )}
+                      <InlineDeleteButton kind="payment" id={p.id} tripSlug={trip.slug} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  )
+}

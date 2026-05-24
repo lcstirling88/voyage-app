@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #0F1413;
+  --color-ink-soft: #2A2E2C;
+  --color-ink-muted: #7B7A72;
+
+  --color-paper: #F6F2E9;
+  --color-paper-pure: #FBF8F1;
+  --color-paper-card: #FFFFFF;
+
+  --color-line: #E8E1D2;
+  --color-line-soft: #F1ECDF;
+
+  --color-sage: #3F5B4E;
+  --color-sage-soft: #E4ECE5;
+  --color-sage-dark: #2A3D33;
+
+  --color-gold: #A8814B;
+  --color-gold-soft: #EFE3CC;
+
+  --color-sakura: #D89695;
+  --color-sakura-soft: #F4DEDD;
+
+  --color-wine: #7A2E2A;
+  --color-rust: #A55A3A;
+
+  --font-display: var(--font-fraunces), serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), monospace;
+
+  --shadow-soft: 0 1px 2px rgba(15,20,19,0.04), 0 8px 24px -8px rgba(15,20,19,0.08);
+  --shadow-lift: 0 2px 4px rgba(15,20,19,0.06), 0 24px 48px -12px rgba(15,20,19,0.14);
+}
+
+html, body { background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); }
+body { font-feature-settings: "ss01", "cv11"; }
+
+.font-display { font-family: var(--font-display); font-variation-settings: "opsz" 96, "SOFT" 50; letter-spacing: -0.01em; }
+.h-display { font-family: var(--font-display); font-variation-settings: "opsz" 144, "SOFT" 30; letter-spacing: -0.025em; line-height: 0.95; }
+.num-mono { font-family: var(--font-mono); font-feature-settings: "tnum"; }
+
+.hero-light {
+  background:
+    radial-gradient(80% 50% at 10% 0%, rgba(244,222,221,0.9) 0%, transparent 55%),
+    radial-gradient(60% 50% at 100% 30%, rgba(239,227,204,0.85) 0%, transparent 60%),
+    linear-gradient(180deg, #FBF8F1 0%, #F6F2E9 100%);
+}
+
+.pattern-asanoha {
+  background-image: radial-gradient(circle at 1px 1px, rgba(15,20,19,0.07) 1px, transparent 0);
+  background-size: 18px 18px;
+}
+
+/* Placeholder gradients used in place of photography */
+.img-tokyo-hotel  { background: linear-gradient(135deg,#1a1f2e 0%, #2d3142 50%, #51527a 100%); }
+.img-kyoto-ryokan { background: linear-gradient(135deg,#3d2820 0%, #5e3a2a 45%, #8b5a3c 100%); }
+.img-nara         { background: linear-gradient(135deg,#3a4a2e 0%, #5e7144 55%, #8ca068 100%); }
+.img-hakone       { background: linear-gradient(135deg,#1f3a4a 0%, #4a6d82 55%, #b5c5d1 100%); }
+.img-fushimi      { background: linear-gradient(135deg,#7a2e2a 0%, #a8413a 50%, #d89695 100%); }
+.img-teamlab      { background: linear-gradient(135deg,#1a1138 0%, #4a2a7a 50%, #9b6dd4 100%); }
+.img-tsukiji      { background: linear-gradient(135deg,#3a2520 0%, #7a4a2a 50%, #c08c5e 100%); }
+.img-arashiyama   { background: linear-gradient(135deg,#1f3a2a 0%, #3f5b4e 50%, #8ba88c 100%); }
+.img-shibuya      { background: linear-gradient(135deg,#0a1a2e 0%, #1a3658 50%, #4a7eb8 100%); }
+.img-meiji        { background: linear-gradient(135deg,#2a3a2a 0%, #4a5e4a 50%, #8aa088 100%); }
+.img-ginza        { background: linear-gradient(135deg,#1a1a1a 0%, #3a3a3a 50%, #a89070 100%); }
+.img-flight       { background: linear-gradient(135deg,#0a1018 0%, #1d2638 60%, #4a5878 100%); }
+.img-restaurant   { background: linear-gradient(135deg,#1a1410 0%, #3a2818 50%, #6a4830 100%); }
+.img-activity     { background: linear-gradient(135deg,#3f5b4e 0%, #5e7e6a 60%, #b0c4ad 100%); }
+.img-transit      { background: linear-gradient(135deg,#1a1a26 0%, #2a3854 50%, #5878a8 100%); }
+
+/* Status pills */
+.pill { display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:500; letter-spacing:0.02em; text-transform:uppercase; }
+.pill-paid     { background:#E4ECE5; color:#2A3D33; }
+.pill-upcoming { background:#EFE3CC; color:#6B5430; }
+.pill-overdue  { background:#F7D9D7; color:#7A2E2A; }
+.pill-auto     { background:#E8E5F4; color:#3D2F7A; }
+.pill-info     { background:#E5EDF4; color:#2A4A6A; }
+
+/* Vertical timeline */
+.tline { position: relative; }
+.tline::before {
+  content: ""; position: absolute; left: 11px; top: 0; bottom: 0;
+  width: 1px; background: var(--color-line);
+}
+.tline-dot {
+  position: absolute; left: 4px; top: 6px; width: 16px; height: 16px;
+  border-radius: 999px; background: var(--color-paper-pure);
+  border: 2px solid var(--color-sage);
+}
+
+/* Donut chart */
+.donut {
+  width: 200px; height: 200px; border-radius: 50%;
+  background: conic-gradient(
+    var(--color-sage) 0 var(--seg1, 32%),
+    var(--color-gold) var(--seg1, 32%) var(--seg2, 56%),
+    var(--color-sakura) var(--seg2, 56%) var(--seg3, 72%),
+    var(--color-wine) var(--seg3, 72%) var(--seg4, 86%),
+    var(--color-sage-dark) var(--seg4, 86%) 100%
+  );
+  position: relative;
+}
+.donut::after {
+  content: ""; position: absolute; inset: 28px;
+  background: var(--color-paper-pure); border-radius: 50%;
+}
+.donut > div { position: absolute; inset: 0; display: grid; place-items: center; z-index: 2; }
+
+/* Animated underline */
+.ulink { position:relative; }
+.ulink::after { content:""; position:absolute; left:0; right:0; bottom:-2px; height:1px; background:currentColor; transform:scaleX(0); transform-origin:right; transition:transform .25s ease; }
+.ulink:hover::after { transform:scaleX(1); transform-origin:left; }
+
+/* Chat */
+.chat-bubble-user { background:#0F1413; color:#FBF8F1; }
+.chat-bubble-ai { background:#FBF8F1; color:#0F1413; border:1px solid #E8E1D2; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #E8E1D2; border-radius: 999px; border: 2px solid #F6F2E9; }
+::-webkit-scrollbar-thumb:hover { background: #C8BFA8; }
+
+/* Form */
+.input {
+  width: 100%;
+  background: var(--color-paper-pure);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.input:focus { border-color: var(--color-sage); box-shadow: 0 0 0 3px rgba(63,91,78,0.12); }
+
+.btn-ink {
+  background: var(--color-ink);
+  color: var(--color-paper-pure);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer;
+  transition: opacity .15s ease;
+}
+.btn-ink:hover { opacity: 0.9; }
+.btn-ink:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--color-line);
+  color: var(--color-ink);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  display: inline-flex; align-items: center; gap: 8px;
+  cursor: pointer;
+}
+.btn-ghost:hover { background: var(--color-line-soft); }
