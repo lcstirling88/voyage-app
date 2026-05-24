@@ -42,6 +42,17 @@ function extractTripToken(to: string): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  // Shared-secret check — when INBOUND_WEBHOOK_SECRET is set in env, require it
+  // in the X-Webhook-Secret header. This stops random people from POSTing fake
+  // bookings into your trips. Disabled when the env var is unset (local dev).
+  const expectedSecret = process.env.INBOUND_WEBHOOK_SECRET
+  if (expectedSecret) {
+    const provided = req.headers.get('x-webhook-secret')
+    if (provided !== expectedSecret) {
+      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+    }
+  }
+
   let payload: PostmarkInbound
   try {
     payload = (await req.json()) as PostmarkInbound
