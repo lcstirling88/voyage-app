@@ -161,10 +161,12 @@ export function planForDay(day: Date, bookings: readonly Booking[]): DayPlan {
       const checkOutTime = parseTimeString(meta.checkOut)
 
       if (pos === 'first') {
-        // Full check-in card in the session matching check-in time (default afternoon)
+        // Full check-in card in the session matching check-in time (default afternoon).
+        // We DON'T set sleepingTonight here — the check-in card already conveys
+        // "you're sleeping here", so showing "Staying tonight at X" again at night
+        // would be redundant.
         const session: Session = checkInTime ? sessionForHour(checkInTime.hour) : 'afternoon'
         plan.sessions[session].unshift({ kind: 'hotel-checkin', booking: b, time: checkInTime })
-        sleepingTonight = b
       } else if (pos === 'middle') {
         sleepingTonight = b
       } else if (pos === 'last') {
