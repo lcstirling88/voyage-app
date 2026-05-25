@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { fmtDate, fmtMoney } from '@/lib/format'
 import { startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from 'date-fns'
 import { InlineDeleteButton } from '@/components/InlineDeleteButton'
+import { AddPaymentFormClient } from '@/components/AddPaymentFormClient'
 
 export default async function CostsPage({ params }: { params: Promise<{ tripSlug: string }> }) {
   const { tripSlug } = await params
@@ -174,6 +175,11 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Manual payment add */}
+        <div>
+          <AddPaymentFormClient tripSlug={trip.slug} homeCurrency={trip.homeCurrency} localCurrency={trip.localCurrency} />
         </div>
 
         {/* Transactions table */}

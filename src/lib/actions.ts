@@ -7,9 +7,11 @@ import { revalidatePath } from 'next/cache'
 import { Resend } from 'resend'
 import { prisma } from './db'
 import { parseEmail, type ParserResult } from './email-parser'
+import { persistParserResult } from './ingest'
 import { deriveThemeFromDestination, type ThemeKey } from './theme'
 import { requireUser, requireTripAccess } from './session'
 import { getAnthropic, PARSER_MODEL } from './anthropic'
+import { profileForDestination } from './destinations'
 
 // ----- Trip creation ----------------------------------------------------------------
 
@@ -87,6 +89,9 @@ export async function createTrip(formData: FormData): Promise<CreateTripResult> 
   const departureCity = String(formData.get('departureCity') ?? '').trim() || null
   const themeOverride = String(formData.get('themeKey') ?? '').trim()
   const citiesRaw = String(formData.get('cities') ?? '').trim()
+  const adultCount = Math.max(0, parseInt(String(formData.get('adultCount') ?? '1'), 10) || 1)
+  const childCount = Math.max(0, parseInt(String(formData.get('childCount') ?? '0'), 10) || 0)
+  const childrenAges = String(formData.get('childrenAges') ?? '').trim() || null
 
   // Validate
   if (!name) return { ok: false, error: 'Trip name is required.' }
@@ -100,6 +105,7 @@ export async function createTrip(formData: FormData): Promise<CreateTripResult> 
   if (endDate < startDate) return { ok: false, error: 'End date must be after start date.' }
 
   const themeKey: ThemeKey = (themeOverride as ThemeKey) || deriveThemeFromDestination(destination)
+  const profile = profileForDestination(destination)
   const slug = await uniqueSlug(slugify(name))
   const inboxToken = await uniqueInboxToken()
 
@@ -120,9 +126,14 @@ export async function createTrip(formData: FormData): Promise<CreateTripResult> 
         startDate,
         endDate,
         homeCurrency,
+        localCurrency: profile.currency,
+        timezone: profile.timezone,
         inboxToken,
         travelerNames,
         departureCity,
+        adultCount,
+        childCount,
+        childrenAges,
         memberships: {
           create: { userId: user.id, role: 'owner' },
         },
@@ -309,6 +320,73 @@ export async function addBookingManually(formData: FormData): Promise<AddBooking
   return { ok: true }
 }
 
+// ----- Manual payment + checklist add -----------------------------------------------
+
+export type AddPaymentResult = { ok: true } | { ok: false; error: string }
+
+export async function addPaymentManually(formData: FormData): Promise<AddPaymentResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!tripSlug) return { ok: false, error: 'Missing trip.' }
+  const { trip } = await requireTripAccess(tripSlug)
+
+  const description = String(formData.get('description') ?? '').trim()
+  const amountRaw = String(formData.get('amount') ?? '').trim()
+  const currency = String(formData.get('currency') ?? trip.homeCurrency).trim().toUpperCase() || trip.homeCurrency
+  const dueDateStr = String(formData.get('dueDate') ?? '')
+  const autoPay = String(formData.get('autoPay') ?? '') === 'on'
+  const paymentMethod = String(formData.get('paymentMethod') ?? '').trim() || null
+  const paid = String(formData.get('paid') ?? '') === 'on'
+
+  if (!description) return { ok: false, error: 'Description is required.' }
+  const amount = parseFloat(amountRaw)
+  if (!isFinite(amount) || amount <= 0) return { ok: false, error: 'Amount must be a positive number.' }
+  if (!dueDateStr) return { ok: false, error: 'Due date is required.' }
+  const dueDate = new Date(dueDateStr + 'T00:00:00Z')
+  if (isNaN(dueDate.getTime())) return { ok: false, error: 'Invalid date.' }
+
+  await prisma.payment.create({
+    data: {
+      tripId: trip.id,
+      description, amount, currency, dueDate,
+      autoPay, paymentMethod,
+      paid, paidAt: paid ? new Date() : null,
+    },
+  })
+
+  revalidatePath(`/trips/${tripSlug}/costs`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+  return { ok: true }
+}
+
+export type AddChecklistResult = { ok: true } | { ok: false; error: string }
+
+export async function addChecklistItem(formData: FormData): Promise<AddChecklistResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  const section = String(formData.get('section') ?? '').trim()  // '3mo' | '1mo' | '1wk' | 'day_of' | 'packing'
+  const category = String(formData.get('category') ?? '').trim() || null
+  const text = String(formData.get('text') ?? '').trim()
+
+  if (!tripSlug || !section || !text) return { ok: false, error: 'Missing required fields.' }
+  const { trip } = await requireTripAccess(tripSlug)
+
+  // Append at end of section/category
+  const lastInSection = await prisma.checklistItem.findFirst({
+    where: { tripId: trip.id, section, category: category ?? null },
+    orderBy: { position: 'desc' },
+  })
+
+  await prisma.checklistItem.create({
+    data: {
+      tripId: trip.id,
+      section, category, text,
+      position: (lastInSection?.position ?? 0) + 1,
+    },
+  })
+
+  revalidatePath(`/trips/${tripSlug}/checklist`)
+  return { ok: true }
+}
+
 // ----- Checklist toggling -----------------------------------------------------------
 
 export async function toggleChecklistItem(formData: FormData) {
@@ -356,53 +434,8 @@ export async function ingestPastedEmail(formData: FormData) {
     return { error: 'Parser failed: ' + String(err) }
   }
 
-  for (const b of parsed.bookings) {
-    await prisma.booking.create({
-      data: {
-        tripId: trip.id,
-        type: b.type,
-        title: b.title,
-        vendor: b.vendor,
-        startAt: new Date(b.startAt),
-        endAt: b.endAt ? new Date(b.endAt) : undefined,
-        location: b.location,
-        address: b.address,
-        confirmationCode: b.confirmationCode,
-        notes: b.notes,
-        cost: b.cost,
-        currency: b.currency ?? trip.homeCurrency,
-        paid: b.paid ?? false,
-        metadata: b.metadata ? JSON.stringify(b.metadata) : undefined,
-        sourceEmailId: incoming.id,
-      },
-    })
-  }
-
-  for (const d of parsed.documents) {
-    await prisma.document.create({
-      data: {
-        tripId: trip.id,
-        category: d.category,
-        title: d.title,
-        notes: d.notes,
-        sourceEmailId: incoming.id,
-      },
-    })
-  }
-
-  for (const p of parsed.payments) {
-    await prisma.payment.create({
-      data: {
-        tripId: trip.id,
-        description: p.description,
-        amount: p.amount,
-        currency: p.currency,
-        dueDate: new Date(p.dueDate),
-        autoPay: p.autoPay ?? false,
-        paymentMethod: p.paymentMethod,
-      },
-    })
-  }
+  // Persist with duplicate detection (updates existing if matched)
+  const ingestSummary = await persistParserResult(trip, parsed, incoming.id)
 
   await prisma.incomingEmail.update({
     where: { id: incoming.id },
@@ -424,6 +457,7 @@ export async function ingestPastedEmail(formData: FormData) {
       documents: parsed.documents.length,
       payments: parsed.payments.length,
     },
+    ingest: ingestSummary,
   }
 }
 
@@ -462,6 +496,9 @@ export async function editTrip(formData: FormData): Promise<EditTripResult> {
   const travelerNames = String(formData.get('travelerNames') ?? '').trim() || null
   const departureCity = String(formData.get('departureCity') ?? '').trim() || null
   const themeOverride = String(formData.get('themeKey') ?? '').trim()
+  const adultCount = Math.max(0, parseInt(String(formData.get('adultCount') ?? '1'), 10) || 1)
+  const childCount = Math.max(0, parseInt(String(formData.get('childCount') ?? '0'), 10) || 0)
+  const childrenAges = String(formData.get('childrenAges') ?? '').trim() || null
 
   if (!name) return { ok: false, error: 'Trip name is required.' }
   if (!destination) return { ok: false, error: 'Destination is required.' }
@@ -472,6 +509,8 @@ export async function editTrip(formData: FormData): Promise<EditTripResult> {
   if (endDate < startDate) return { ok: false, error: 'End date must be after start date.' }
 
   const themeKey: ThemeKey = (themeOverride as ThemeKey) || deriveThemeFromDestination(destination)
+  // Recompute timezone + localCurrency if destination changed
+  const profile = profileForDestination(destination)
 
   // If name changed materially, regenerate slug
   let slug = existing.slug
@@ -482,7 +521,13 @@ export async function editTrip(formData: FormData): Promise<EditTripResult> {
 
   await prisma.trip.update({
     where: { id },
-    data: { name, tagline, destination, themeKey, startDate, endDate, homeCurrency, travelerNames, departureCity, slug },
+    data: {
+      name, tagline, destination, themeKey, startDate, endDate, homeCurrency,
+      travelerNames, departureCity, slug,
+      timezone: profile.timezone,
+      localCurrency: profile.currency,
+      adultCount, childCount, childrenAges,
+    },
   })
 
   revalidatePath('/trips')

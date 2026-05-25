@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Check, Clock, Utensils, Plane, Train, Car, BedDouble, LogOut, Plus } from 'lucide-react'
+import { Check, Clock, Utensils, Plane, Train, Car, BedDouble, LogOut, Plus, AlertTriangle } from 'lucide-react'
 import { format, startOfDay, eachDayOfInterval, differenceInDays } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
@@ -336,6 +336,18 @@ function BookingRow({
     }
   }
 
+  // Show a cancellation-deadline pill if cancelByAt is in the next 14 days and we haven't passed it
+  let cancelPill: { text: string; tone: 'warning' | 'overdue' } | null = null
+  if (booking.cancelByAt) {
+    const daysToCancel = differenceInDays(startOfDay(booking.cancelByAt), startOfDay(new Date()))
+    if (daysToCancel < 0) {
+      // Past the deadline — show muted "non-refundable now" only if still upcoming activity
+      if (booking.startAt > new Date()) cancelPill = { text: 'No refund', tone: 'overdue' }
+    } else if (daysToCancel <= 14) {
+      cancelPill = { text: `Cancel by ${format(booking.cancelByAt, 'MMM d')}`, tone: 'warning' }
+    }
+  }
+
   return (
     <div className="border border-line rounded-lg p-3 sm:p-4 bg-paper-pure flex items-center gap-3 sm:gap-4">
       <div className="w-10 sm:w-12 text-center shrink-0">
@@ -349,6 +361,11 @@ function BookingRow({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           {booking.notes && <div className="text-xs text-ink-muted truncate">{booking.notes}</div>}
           {spanLabel && <span className="pill pill-info text-[9px]">{spanLabel}</span>}
+          {cancelPill && (
+            <span className={`pill text-[9px] ${cancelPill.tone === 'warning' ? 'pill-upcoming' : 'pill-overdue'}`}>
+              <AlertTriangle className="w-3 h-3" /> {cancelPill.text}
+            </span>
+          )}
         </div>
         {booking.confirmationCode && (
           <div className="text-xs num-mono text-ink-muted mt-0.5 truncate">

@@ -23,6 +23,8 @@ export type ParsedBooking = {
   cost?: number
   currency?: string
   paid?: boolean
+  cancelByAt?: string                                   // ISO datetime — last moment to cancel for free
+  cancellationPolicy?: string                           // free-text policy summary
   metadata?: Record<string, string | number | boolean>  // for cars: dropoffLocation, vehicle, etc.
 }
 
@@ -77,6 +79,8 @@ const TOOL = {
             cost: { type: 'number' as const },
             currency: { type: 'string' as const, description: 'ISO 4217 code, e.g. JPY, AUD' },
             paid: { type: 'boolean' as const, description: 'true if already paid; false if pending' },
+            cancelByAt: { type: 'string' as const, description: 'ISO 8601 datetime — the last moment the customer can cancel for free (no fee).' },
+            cancellationPolicy: { type: 'string' as const, description: 'One-sentence summary of the cancellation policy (e.g. "Free cancellation up to 48 hours before check-in").' },
             metadata: {
               type: 'object' as const,
               description: 'Type-specific extras: checkIn/checkOut/breakfast/nights for hotels; seats/class/baggage for flights; etc.',
@@ -162,7 +166,12 @@ TIME EXTRACTION — READ CAREFULLY:
 - For multi-session activities (ski school, language course, daily yoga): use the daily start time, not when the program "ends" or "concludes".
 - For ambiguous emails with multiple times mentioned: pick the time the customer actually has to BE somewhere to participate. When in doubt, prefer the earlier action time over a later collection time.
 - AM vs PM: be extra careful. Most activities run during daylight hours; if you see "8:30" with no qualifier and context suggests morning (ski lessons, school programs, sunrise tours), use 08:30 not 20:30. Only use PM times when explicitly stated (e.g. "20:30", "8:30 PM", "evening").
-- All datetimes must be ISO 8601 with explicit timezone offset matching the destination's local time. If the email is in a different timezone than the destination, convert accordingly.`
+- All datetimes must be ISO 8601 with explicit timezone offset matching the destination's local time. If the email is in a different timezone than the destination, convert accordingly.
+
+CANCELLATION POLICY:
+- If the email states a "free cancellation until [date]" deadline, populate cancelByAt with that datetime.
+- Always set cancellationPolicy to a one-sentence summary (e.g. "Free cancellation up to 48 hours before check-in" or "Non-refundable").
+- Don't guess — leave these fields empty if the email doesn't mention cancellation terms.`
 
   const userContent = `Subject: ${email.subject}
 From: ${email.from}

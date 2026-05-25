@@ -18,6 +18,9 @@ type TripData = {
   homeCurrency: string
   travelerNames: string | null
   departureCity: string | null
+  adultCount: number
+  childCount: number
+  childrenAges: string | null
   inboxToken: string
   bookingsCount: number
   documentsCount: number
@@ -34,6 +37,9 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
   const [departureCity, setDepartureCity] = useState(trip.departureCity ?? '')
   const [themeKey, setThemeKey] = useState<ThemeKey>(trip.themeKey as ThemeKey)
   const [themeOverridden, setThemeOverridden] = useState(true) // already set
+  const [adultCount, setAdultCount] = useState(trip.adultCount ?? 1)
+  const [childCount, setChildCount] = useState(trip.childCount ?? 0)
+  const [childrenAges, setChildrenAges] = useState(trip.childrenAges ?? '')
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -62,6 +68,9 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
     fd.set('travelerNames', travelerNames)
     fd.set('departureCity', departureCity)
     fd.set('themeKey', themeKey)
+    fd.set('adultCount', String(adultCount))
+    fd.set('childCount', String(childCount))
+    fd.set('childrenAges', childrenAges)
     startTransition(async () => {
       const res = (await editTrip(fd)) as EditTripResult
       if (res.ok === false) setError(res.error)
@@ -137,6 +146,20 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
             <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Travellers</label>
             <input className="input mt-1.5" value={travelerNames} onChange={(e) => setTravelerNames(e.target.value)} />
           </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Adults</label>
+            <input className="input mt-1.5 num-mono" type="number" min={0} max={20} value={adultCount} onChange={(e) => setAdultCount(Math.max(0, parseInt(e.target.value, 10) || 0))} />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Children</label>
+            <input className="input mt-1.5 num-mono" type="number" min={0} max={20} value={childCount} onChange={(e) => setChildCount(Math.max(0, parseInt(e.target.value, 10) || 0))} />
+          </div>
+          {childCount > 0 && (
+            <div className="col-span-2">
+              <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Children&apos;s ages</label>
+              <input className="input mt-1.5" value={childrenAges} onChange={(e) => setChildrenAges(e.target.value)} placeholder="e.g. 8, 11" />
+            </div>
+          )}
         </section>
 
         {error && (

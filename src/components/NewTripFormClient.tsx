@@ -19,6 +19,9 @@ export function NewTripFormClient() {
   const [cities, setCities] = useState('')
   const [themeKey, setThemeKey] = useState<ThemeKey>('default')
   const [themeOverridden, setThemeOverridden] = useState(false)
+  const [adultCount, setAdultCount] = useState(2)
+  const [childCount, setChildCount] = useState(0)
+  const [childrenAges, setChildrenAges] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -45,6 +48,9 @@ export function NewTripFormClient() {
     fd.set('departureCity', departureCity)
     fd.set('cities', cities)
     fd.set('themeKey', themeKey)
+    fd.set('adultCount', String(adultCount))
+    fd.set('childCount', String(childCount))
+    fd.set('childrenAges', childrenAges)
 
     startTransition(async () => {
       // Server action will redirect on success — we only see a result here on failure
@@ -182,6 +188,41 @@ export function NewTripFormClient() {
             placeholder="e.g. Liam Christiansen, +1"
           />
         </div>
+
+        <div>
+          <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Adults</label>
+          <input
+            className="input mt-1.5 num-mono"
+            type="number"
+            min={0}
+            max={20}
+            value={adultCount}
+            onChange={(e) => setAdultCount(Math.max(0, parseInt(e.target.value, 10) || 0))}
+          />
+        </div>
+        <div>
+          <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Children</label>
+          <input
+            className="input mt-1.5 num-mono"
+            type="number"
+            min={0}
+            max={20}
+            value={childCount}
+            onChange={(e) => setChildCount(Math.max(0, parseInt(e.target.value, 10) || 0))}
+          />
+        </div>
+        {childCount > 0 && (
+          <div className="col-span-2">
+            <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Children&apos;s ages</label>
+            <input
+              className="input mt-1.5"
+              value={childrenAges}
+              onChange={(e) => setChildrenAges(e.target.value)}
+              placeholder="e.g. 8, 11"
+            />
+            <p className="text-xs text-ink-muted mt-1.5">Helps the AI tailor activity suggestions and packing lists.</p>
+          </div>
+        )}
 
         <div className="col-span-2">
           <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">

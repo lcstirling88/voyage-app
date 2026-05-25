@@ -79,9 +79,17 @@ model Trip {
   startDate     DateTime
   endDate       DateTime
   homeCurrency  String   @default("AUD")
+  localCurrency String?  // ISO code of the destination's currency (e.g. NZD)
+  timezone      String   @default("UTC") // IANA, e.g. "Pacific/Auckland"
   inboxToken    String   @unique
   travelerNames String?
   departureCity String?
+
+  // Party composition for AI-aware suggestions and packing
+  adultCount    Int      @default(1)
+  childCount    Int      @default(0)
+  childrenAges  String?  // comma-separated ages, e.g. "8, 11"
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -143,32 +151,38 @@ model City {
 }
 
 model Booking {
-  id               String    @id @default(cuid())
-  tripId           String
-  type             String
-  title            String
-  vendor           String?
-  startAt          DateTime
-  endAt            DateTime?
-  location         String?
-  address          String?
-  confirmationCode String?
-  notes            String?
-  cost             Float?
-  currency         String?
-  paid             Boolean   @default(false)
-  paidAt           DateTime?
-  paymentMethod    String?
-  metadata         String?
-  sourceEmailId    String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  tripId             String
+  type               String
+  title              String
+  vendor             String?
+  startAt            DateTime
+  endAt              DateTime?
+  location           String?
+  address            String?
+  confirmationCode   String?
+  notes              String?
+  cost               Float?
+  currency           String?
+  paid               Boolean   @default(false)
+  paidAt             DateTime?
+  paymentMethod      String?
+  metadata           String?
+
+  // Cancellation policy extracted from confirmation emails
+  cancelByAt         DateTime?
+  cancellationPolicy String?
+
+  sourceEmailId      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   trip        Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
   sourceEmail IncomingEmail? @relation(fields: [sourceEmailId], references: [id], onDelete: SetNull)
 
   @@index([tripId])
   @@index([startAt])
+  @@index([cancelByAt])
 }
 
 model Document {

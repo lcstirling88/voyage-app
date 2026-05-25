@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { parseEmail, type EmailInput } from '@/lib/email-parser'
+import { persistParserResult } from '@/lib/ingest'
 
 type PostmarkAttachment = {
   Name: string
@@ -96,48 +97,7 @@ export async function POST(req: NextRequest) {
       html: incoming.htmlBody ?? undefined,
     }
     const parsed = await parseEmail(input)
-
-    for (const b of parsed.bookings) {
-      await prisma.booking.create({
-        data: {
-          tripId: trip.id,
-          type: b.type,
-          title: b.title,
-          vendor: b.vendor,
-          startAt: new Date(b.startAt),
-          endAt: b.endAt ? new Date(b.endAt) : undefined,
-          location: b.location,
-          address: b.address,
-          confirmationCode: b.confirmationCode,
-          notes: b.notes,
-          cost: b.cost,
-          currency: b.currency ?? trip.homeCurrency,
-          paid: b.paid ?? false,
-          metadata: b.metadata ? JSON.stringify(b.metadata) : undefined,
-          sourceEmailId: incoming.id,
-        },
-      })
-    }
-
-    for (const d of parsed.documents) {
-      await prisma.document.create({
-        data: { tripId: trip.id, category: d.category, title: d.title, notes: d.notes, sourceEmailId: incoming.id },
-      })
-    }
-
-    for (const p of parsed.payments) {
-      await prisma.payment.create({
-        data: {
-          tripId: trip.id,
-          description: p.description,
-          amount: p.amount,
-          currency: p.currency,
-          dueDate: new Date(p.dueDate),
-          autoPay: p.autoPay ?? false,
-          paymentMethod: p.paymentMethod,
-        },
-      })
-    }
+    const ingestSummary = await persistParserResult(trip, parsed, incoming.id)
 
     await prisma.incomingEmail.update({
       where: { id: incoming.id },
@@ -149,11 +109,7 @@ export async function POST(req: NextRequest) {
       tripSlug: trip.slug,
       mode: parsed.mode,
       summary: parsed.summary,
-      counts: {
-        bookings: parsed.bookings.length,
-        documents: parsed.documents.length,
-        payments: parsed.payments.length,
-      },
+      ingest: ingestSummary,
     })
   } catch (err) {
     await prisma.incomingEmail.update({

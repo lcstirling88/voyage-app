@@ -3,6 +3,7 @@ import { CheckCircle2, CircleDashed, Circle, Sparkles } from 'lucide-react'
 import { format, subDays, subMonths } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { ChecklistCheckbox } from '@/components/ChecklistCheckbox'
+import { AddChecklistItemClient } from '@/components/AddChecklistItemClient'
 
 function sectionMeta(sectionKey: string, tripStart: Date): { title: string; subtitle: string } {
   switch (sectionKey) {
@@ -89,6 +90,7 @@ export default async function ChecklistPage({ params }: { params: Promise<{ trip
                       {items.map((item) => (
                         <ChecklistCheckbox key={item.id} id={item.id} done={item.done} label={item.text} />
                       ))}
+                      <AddChecklistItemClient tripSlug={trip.slug} section={sectionKey} />
                     </div>
                   </details>
                 )
@@ -110,8 +112,12 @@ export default async function ChecklistPage({ params }: { params: Promise<{ trip
                   {items.map((item) => (
                     <ChecklistCheckbox key={item.id} id={item.id} done={item.done} label={item.text} />
                   ))}
+                  <AddChecklistItemClient tripSlug={trip.slug} section="packing" category={cat} />
                 </div>
               ))}
+              <div className="pt-3 border-t border-line-soft">
+                <AddChecklistItemClient tripSlug={trip.slug} section="packing" category="other" />
+              </div>
             </div>
           </section>
 
