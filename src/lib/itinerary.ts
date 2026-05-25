@@ -43,6 +43,27 @@ export function sessionForHour(h: number): Session {
   return 'night'
 }
 
+/**
+ * Return every session that the time range [startMin, endMin] touches.
+ * Used for all-day activities that span sessions (e.g. ski lessons 09:30–15:45
+ * appear in BOTH morning and afternoon).
+ *
+ * Session minute boundaries: morning [0, 720), afternoon [720, 1080), night [1080, 1440)
+ * Strict comparisons at boundaries to avoid an event ending right at noon being
+ * tagged as "afternoon".
+ */
+export function sessionsForRange(startMin: number, endMin: number): Session[] {
+  // Clamp wraparound and instant ranges
+  if (endMin < startMin) endMin = startMin
+  const result: Session[] = []
+  if (startMin < 720 && (endMin > 0 || startMin === endMin))    result.push('morning')
+  if (startMin < 1080 && endMin > 720)                            result.push('afternoon')
+  if (endMin > 1080)                                              result.push('night')
+  // Safety: if somehow nothing matched, default to the session of startMin
+  if (result.length === 0) result.push(sessionForHour(Math.floor(startMin / 60)))
+  return result
+}
+
 export type DayPos = 'before' | 'first' | 'middle' | 'last' | 'single' | 'after'
 
 export function dayPos(day: Date, b: Pick<Booking, 'startAt' | 'endAt'>): DayPos {
@@ -174,11 +195,23 @@ export function planForDay(day: Date, bookings: readonly Booking[]): DayPlan {
 
     // Activity, restaurant, flight, transit, other
     if ((pos === 'middle' || pos === 'last') && !ALWAYS_EXPAND_TYPES.has(b.type)) continue
-    const hour = b.startAt.getUTCHours()
-    const minute = b.startAt.getUTCMinutes()
-    plan.sessions[sessionForHour(hour)].push({
-      kind: 'booking', booking: b, position: pos, sortHour: hour, sortMinute: minute,
-    })
+    const startMin = b.startAt.getUTCHours() * 60 + b.startAt.getUTCMinutes()
+    const endMin = b.endAt
+      ? b.endAt.getUTCHours() * 60 + b.endAt.getUTCMinutes()
+      : startMin
+
+    // Activities with a real time range span every session they touch (e.g. 09:30-15:45 → morning + afternoon).
+    // Other types stay anchored to their start hour.
+    const sessions: Session[] = b.type === 'activity' && b.endAt
+      ? sessionsForRange(startMin, endMin)
+      : [sessionForHour(b.startAt.getUTCHours())]
+
+    for (const s of sessions) {
+      plan.sessions[s].push({
+        kind: 'booking', booking: b, position: pos,
+        sortHour: Math.floor(startMin / 60), sortMinute: startMin % 60,
+      })
+    }
   }
 
   // Sort each session's regular items by time; keep pinned hotel-checkin/out at the front
