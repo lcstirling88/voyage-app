@@ -149,6 +149,55 @@ export async function createTrip(formData: FormData): Promise<CreateTripResult> 
   redirect(`/trips/${slug}/inbox`)
 }
 
+// ----- Manual booking add -----------------------------------------------------------
+
+export type AddBookingResult = { ok: true } | { ok: false; error: string }
+
+export async function addBookingManually(formData: FormData): Promise<AddBookingResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!tripSlug) return { ok: false, error: 'Missing trip.' }
+  const { trip } = await requireTripAccess(tripSlug)
+
+  const title = String(formData.get('title') ?? '').trim()
+  const type = String(formData.get('type') ?? 'activity').trim() as
+    | 'activity' | 'restaurant' | 'transit' | 'flight' | 'hotel' | 'car' | 'other'
+  const dateStr = String(formData.get('date') ?? '')           // YYYY-MM-DD
+  const timeStr = String(formData.get('time') ?? '09:00')      // HH:mm
+  const endDateStr = String(formData.get('endDate') ?? '')     // optional
+  const endTimeStr = String(formData.get('endTime') ?? '')     // optional
+  const location = String(formData.get('location') ?? '').trim() || null
+  const notes = String(formData.get('notes') ?? '').trim() || null
+
+  if (!title) return { ok: false, error: 'Title is required.' }
+  if (!dateStr) return { ok: false, error: 'Date is required.' }
+
+  const startAt = new Date(`${dateStr}T${timeStr || '09:00'}:00Z`)
+  if (isNaN(startAt.getTime())) return { ok: false, error: 'Invalid date/time.' }
+
+  let endAt: Date | null = null
+  if (endDateStr) {
+    endAt = new Date(`${endDateStr}T${endTimeStr || '23:59'}:00Z`)
+    if (isNaN(endAt.getTime())) return { ok: false, error: 'Invalid end date/time.' }
+    if (endAt < startAt) return { ok: false, error: 'End must be after start.' }
+  }
+
+  await prisma.booking.create({
+    data: {
+      tripId: trip.id,
+      type,
+      title,
+      startAt,
+      endAt,
+      location,
+      notes,
+    },
+  })
+
+  revalidatePath(`/trips/${tripSlug}/itinerary`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+  return { ok: true }
+}
+
 // ----- Checklist toggling -----------------------------------------------------------
 
 export async function toggleChecklistItem(formData: FormData) {

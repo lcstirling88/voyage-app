@@ -11,19 +11,19 @@
 import { getAnthropic, PARSER_MODEL } from './anthropic'
 
 export type ParsedBooking = {
-  type: 'hotel' | 'flight' | 'activity' | 'restaurant' | 'transit' | 'other'
+  type: 'hotel' | 'flight' | 'activity' | 'restaurant' | 'transit' | 'car' | 'other'
   title: string
   vendor?: string
   startAt: string  // ISO
   endAt?: string   // ISO
-  location?: string
+  location?: string         // for cars: pickup location
   address?: string
   confirmationCode?: string
   notes?: string
   cost?: number
   currency?: string
   paid?: boolean
-  metadata?: Record<string, string | number | boolean>
+  metadata?: Record<string, string | number | boolean>  // for cars: dropoffLocation, vehicle, etc.
 }
 
 export type ParsedDocument = {
@@ -65,7 +65,7 @@ const TOOL = {
         items: {
           type: 'object' as const,
           properties: {
-            type: { type: 'string' as const, enum: ['hotel', 'flight', 'activity', 'restaurant', 'transit', 'other'] },
+            type: { type: 'string' as const, enum: ['hotel', 'flight', 'activity', 'restaurant', 'transit', 'car', 'other'] },
             title: { type: 'string' as const, description: 'Short human-readable title' },
             vendor: { type: 'string' as const },
             startAt: { type: 'string' as const, description: 'ISO 8601 datetime — for hotels, check-in time' },
@@ -149,7 +149,8 @@ Guidelines:
 - Hotel emails: type "hotel", startAt = check-in datetime, endAt = check-out datetime, put breakfast/checkIn/checkOut/nights in metadata.
 - Flight emails: type "flight", startAt = departure, endAt = arrival, put seats/class/baggage in metadata.
 - Restaurant emails: type "restaurant", startAt = reservation time.
-- Tour/activity emails: type "activity".
+- Tour/activity emails: type "activity". If the activity spans multiple days (e.g. "4-day ski lessons", "3-day cooking course"), set endAt to the last day so it shows on each day of its span.
+- Car rental emails: type "car", startAt = pickup datetime, endAt = return datetime, location = pickup location, put dropoffLocation/vehicle/insurance in metadata.
 - If the email is a visa approval, insurance policy, or similar non-booking document, return it under documents instead of bookings.
 - If the email mentions a future automatic charge (e.g. final balance auto-billed on a date), include it under payments.
 - If you can't extract anything useful, return empty arrays but still write a summary.
@@ -184,6 +185,34 @@ ${email.text || (email.html ? email.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g
 function parseWithMock(email: EmailInput): ParserResult {
   const subject = email.subject.toLowerCase()
   const body = email.text.toLowerCase()
+
+  // Car rental shaped
+  if (
+    subject.includes('rental') || subject.includes('car hire') || subject.includes('booking') &&
+    (body.includes('pick up') || body.includes('pickup') || body.includes('rental car') ||
+     body.includes('hertz') || body.includes('avis') || body.includes('budget rent'))
+  ) {
+    if (body.includes('vehicle') || body.includes('rental') || body.includes('pickup') ||
+        body.includes('drop off') || body.includes('drop-off') || body.includes('return location')) {
+      const codeMatch = email.text.match(/(?:confirmation|booking|reservation)[^\d]{0,20}([A-Z0-9-]{6,})/i)
+      const vehicleMatch = email.text.match(/(?:vehicle|car|model)[:\s]+([^\n]{3,40})/i)
+      return {
+        mode: 'mock',
+        summary: 'Car rental booking.',
+        bookings: [{
+          type: 'car',
+          title: email.subject,
+          vendor: email.from.split('@')[1]?.split('.')[0] ?? undefined,
+          startAt: extractDateOrNext(email.text, 30) + 'T10:00:00Z',
+          endAt: extractDateOrNext(email.text, 33) + 'T10:00:00Z',
+          confirmationCode: codeMatch?.[1],
+          metadata: vehicleMatch ? { vehicle: vehicleMatch[1].trim() } : {},
+        }],
+        documents: [{ category: 'voucher', title: 'Car rental booking', notes: codeMatch?.[1] }],
+        payments: [],
+      }
+    }
+  }
 
   // Hotel-shaped
   if (
