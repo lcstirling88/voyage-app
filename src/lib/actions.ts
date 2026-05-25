@@ -92,6 +92,7 @@ export async function createTrip(formData: FormData): Promise<CreateTripResult> 
   const adultCount = Math.max(0, parseInt(String(formData.get('adultCount') ?? '1'), 10) || 1)
   const childCount = Math.max(0, parseInt(String(formData.get('childCount') ?? '0'), 10) || 0)
   const childrenAges = String(formData.get('childrenAges') ?? '').trim() || null
+  const colorPalette = (String(formData.get('colorPalette') ?? 'pastel').trim() || 'pastel') as 'pastel' | 'jewel' | 'mono'
 
   // Validate
   if (!name) return { ok: false, error: 'Trip name is required.' }
@@ -134,6 +135,7 @@ export async function createTrip(formData: FormData): Promise<CreateTripResult> 
         adultCount,
         childCount,
         childrenAges,
+        colorPalette,
         memberships: {
           create: { userId: user.id, role: 'owner' },
         },
@@ -633,6 +635,7 @@ export async function editTrip(formData: FormData): Promise<EditTripResult> {
   const adultCount = Math.max(0, parseInt(String(formData.get('adultCount') ?? '1'), 10) || 1)
   const childCount = Math.max(0, parseInt(String(formData.get('childCount') ?? '0'), 10) || 0)
   const childrenAges = String(formData.get('childrenAges') ?? '').trim() || null
+  const colorPalette = (String(formData.get('colorPalette') ?? 'pastel').trim() || 'pastel') as 'pastel' | 'jewel' | 'mono'
 
   if (!name) return { ok: false, error: 'Trip name is required.' }
   if (!destination) return { ok: false, error: 'Destination is required.' }
@@ -661,6 +664,7 @@ export async function editTrip(formData: FormData): Promise<EditTripResult> {
       timezone: profile.timezone,
       localCurrency: profile.currency,
       adultCount, childCount, childrenAges,
+      colorPalette,
     },
   })
 

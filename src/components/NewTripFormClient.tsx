@@ -22,6 +22,7 @@ export function NewTripFormClient() {
   const [adultCount, setAdultCount] = useState(2)
   const [childCount, setChildCount] = useState(0)
   const [childrenAges, setChildrenAges] = useState('')
+  const [colorPalette, setColorPalette] = useState('pastel')
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -51,6 +52,7 @@ export function NewTripFormClient() {
     fd.set('adultCount', String(adultCount))
     fd.set('childCount', String(childCount))
     fd.set('childrenAges', childrenAges)
+    fd.set('colorPalette', colorPalette)
 
     startTransition(async () => {
       // Server action will redirect on success — we only see a result here on failure
@@ -223,6 +225,35 @@ export function NewTripFormClient() {
             <p className="text-xs text-ink-muted mt-1.5">Helps the AI tailor activity suggestions and packing lists.</p>
           </div>
         )}
+
+        <div className="col-span-2">
+          <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Accommodation colour scheme</label>
+          <div className="grid grid-cols-3 gap-2 mt-1.5">
+            {[
+              { value: 'pastel', label: 'Pastel', sample: ['#E8C9C9', '#CBDCE8', '#CFE5D2', '#E8DFC4'] },
+              { value: 'jewel',  label: 'Jewel',  sample: ['#2E5A47', '#2A4A72', '#7A2E3A', '#503279'] },
+              { value: 'mono',   label: 'Mono',   sample: ['#3F5B4E', '#3F5B4E', '#3F5B4E', '#3F5B4E'] },
+            ].map((o) => {
+              const active = colorPalette === o.value
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setColorPalette(o.value)}
+                  className={`text-left rounded-lg border p-3 transition ${active ? 'border-ink shadow-soft' : 'border-line hover:border-ink-muted'}`}
+                >
+                  <div className="flex gap-1 mb-2">
+                    {o.sample.map((c, i) => (
+                      <span key={i} className="h-3 flex-1 rounded-sm" style={{ background: c }} />
+                    ))}
+                  </div>
+                  <div className="text-xs font-medium">{o.label}</div>
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-xs text-ink-muted mt-2">Each hotel in your trip gets a distinct colour bar under the day header in your itinerary.</p>
+        </div>
 
         <div className="col-span-2">
           <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">

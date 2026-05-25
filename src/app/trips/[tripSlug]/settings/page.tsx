@@ -76,6 +76,7 @@ export default async function TripSettingsPage({ params }: { params: Promise<{ t
               adultCount: trip.adultCount,
               childCount: trip.childCount,
               childrenAges: trip.childrenAges,
+              colorPalette: trip.colorPalette,
               inboxToken: trip.inboxToken,
               bookingsCount: trip._count.bookings,
               documentsCount: trip._count.documents,

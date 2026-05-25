@@ -8,7 +8,8 @@ import { fmtTime, safeJson, fmtMoneyFull } from '@/lib/format'
 import { InlineDeleteButton } from '@/components/InlineDeleteButton'
 import {
   planForDay, SESSIONS, SESSION_LABEL, formatTime,
-  type DayPlan, type Session, type SessionItem, type ParsedTime,
+  hotelOrderForTrip, sleepingTonightFor, getPalette, colorForHotel,
+  type DayPlan, type Session, type SessionItem, type ParsedTime, type PaletteSpec,
 } from '@/lib/itinerary'
 import type { Booking } from '@prisma/client'
 
@@ -54,6 +55,10 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
 
   const days = eachDayOfInterval({ start: startOfDay(trip.startDate), end: startOfDay(trip.endDate) })
 
+  // Stable per-trip hotel colour assignment
+  const hotelOrder = hotelOrderForTrip(trip.bookings)
+  const palette = getPalette(trip.colorPalette)
+
   return (
     <>
       <div className="hero-light border-b border-line px-6 sm:px-10 py-8 sm:py-10">
@@ -69,6 +74,10 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
         {days.map((day, idx) => {
           const plan = planForDay(day, trip.bookings)
           const dateKey = format(day, 'yyyy-MM-dd')
+          const sleepingTonight = sleepingTonightFor(day, trip.bookings)
+          const hotelColor = sleepingTonight
+            ? colorForHotel(sleepingTonight.id, hotelOrder, palette)
+            : null
           return (
             <DayBlock
               key={dateKey}
@@ -78,6 +87,9 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
               plan={plan}
               tripSlug={trip.slug}
               homeCurrency={trip.homeCurrency}
+              sleepingTonight={sleepingTonight}
+              hotelColor={hotelColor}
+              paletteTextColor={palette.textOnColor}
             />
           )
         })}
@@ -91,7 +103,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
 // ============================================================================
 
 function DayBlock({
-  day, dateKey, idx, plan, tripSlug, homeCurrency,
+  day, dateKey, idx, plan, tripSlug, homeCurrency, sleepingTonight, hotelColor, paletteTextColor,
 }: {
   day: Date
   dateKey: string
@@ -99,11 +111,14 @@ function DayBlock({
   plan: DayPlan
   tripSlug: string
   homeCurrency: string
+  sleepingTonight: import('@prisma/client').Booking | null
+  hotelColor: string | null
+  paletteTextColor: string
 }) {
   return (
     <div className="tline pl-8 sm:pl-10">
       <div className="tline-dot" />
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center gap-3 mb-2">
         <span className="font-display text-3xl sm:text-4xl">Day {String(idx + 1).padStart(2, '0')}</span>
         <span className="text-ink-muted text-xs sm:text-sm flex-1 truncate">{format(day, 'EEEE, MMM d')}</span>
         <Link
@@ -115,6 +130,22 @@ function DayBlock({
           <Plus className="w-4 h-4" />
         </Link>
       </div>
+
+      {/* Accommodation colour bar — at-a-glance "where am I sleeping tonight" */}
+      {sleepingTonight && hotelColor && (
+        <div
+          className="rounded-md px-3 py-1.5 mb-5 text-[10px] uppercase tracking-[0.2em] flex items-center gap-2"
+          style={{ background: hotelColor, color: paletteTextColor }}
+        >
+          <BedDouble className="w-3 h-3" />
+          <span className="truncate font-medium">{sleepingTonight.title}</span>
+        </div>
+      )}
+      {!sleepingTonight && (
+        <div className="text-[10px] uppercase tracking-[0.2em] text-ink-muted/50 mb-5 italic">
+          No accommodation tonight
+        </div>
+      )}
 
       <div className="space-y-6">
         {SESSIONS.map((session) => (

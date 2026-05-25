@@ -64,6 +64,111 @@ export function sessionsForRange(startMin: number, endMin: number): Session[] {
   return result
 }
 
+// ---------- Accommodation colour palettes -------------------------------------------
+
+export type ColorPalette = 'pastel' | 'jewel' | 'mono'
+
+export type PaletteSpec = {
+  key: ColorPalette
+  label: string
+  description: string
+  colors: string[]      // background colours
+  textOnColor: string   // foreground text colour for contrast
+}
+
+export const PALETTES: Record<ColorPalette, PaletteSpec> = {
+  pastel: {
+    key: 'pastel',
+    label: 'Pastel',
+    description: 'Soft complementary pastels — gentle on the eye, magazine-like.',
+    colors: [
+      '#E8C9C9', // dusty rose
+      '#CBDCE8', // powder blue
+      '#CFE5D2', // soft mint
+      '#E8DFC4', // butter
+      '#D8C9E8', // lavender
+      '#E8D2BD', // peach
+      '#C9E2E8', // duck egg
+      '#E2C9E8', // mauve
+    ],
+    textOnColor: '#3A2418',
+  },
+  jewel: {
+    key: 'jewel',
+    label: 'Jewel',
+    description: 'Rich saturated tones — emerald, sapphire, ruby. More punch.',
+    colors: [
+      '#2E5A47', // emerald
+      '#2A4A72', // sapphire
+      '#7A2E3A', // ruby
+      '#503279', // amethyst
+      '#7A5621', // topaz
+      '#562055', // mulberry
+      '#1F5462', // teal
+      '#7A3318', // garnet
+    ],
+    textOnColor: '#FBF8F1',
+  },
+  mono: {
+    key: 'mono',
+    label: 'Mono',
+    description: 'Single sage tone — subtle, all hotels look the same.',
+    colors: ['#3F5B4E'],
+    textOnColor: '#FBF8F1',
+  },
+}
+
+export function getPalette(key: string | null | undefined): PaletteSpec {
+  if (key && key in PALETTES) return PALETTES[key as ColorPalette]
+  return PALETTES.pastel
+}
+
+/**
+ * Return a deterministic colour for a given hotel within the trip, using the
+ * provided ordered list of distinct hotel IDs to cycle through the palette.
+ */
+export function colorForHotel(hotelId: string, hotelIdsInOrder: string[], palette: PaletteSpec): string {
+  const idx = hotelIdsInOrder.indexOf(hotelId)
+  const safe = idx < 0 ? 0 : idx
+  return palette.colors[safe % palette.colors.length]
+}
+
+/**
+ * Get the ordered list of distinct hotel booking IDs in the trip, sorted by startAt.
+ * Used together with colorForHotel to assign stable per-trip colours.
+ */
+export function hotelOrderForTrip(bookings: readonly Booking[]): string[] {
+  const seen = new Set<string>()
+  const sorted = [...bookings]
+    .filter((b) => b.type === 'hotel')
+    .sort((a, b) => a.startAt.getTime() - b.startAt.getTime())
+  const ids: string[] = []
+  for (const b of sorted) {
+    if (!seen.has(b.id)) { seen.add(b.id); ids.push(b.id) }
+  }
+  return ids
+}
+
+/**
+ * Find the hotel booking that covers the NIGHT of the given day, if any.
+ * Hotel covers nights from startAt (inclusive) to endAt-1 (inclusive). On the
+ * endAt day itself you've already checked out in the morning.
+ */
+export function sleepingTonightFor(day: Date, bookings: readonly Booking[]): Booking | null {
+  const target = startOfDay(day)
+  for (const b of bookings) {
+    if (b.type !== 'hotel') continue
+    const start = startOfDay(b.startAt)
+    const end = startOfDay(b.endAt ?? b.startAt)
+    if (isEqual(start, end)) continue // 0-night stays — skip
+    // Sleeping nights = [start, end-1]. So target sleeping if start <= target < end.
+    if ((isEqual(target, start) || isAfter(target, start)) && isBefore(target, end)) {
+      return b
+    }
+  }
+  return null
+}
+
 export type DayPos = 'before' | 'first' | 'middle' | 'last' | 'single' | 'after'
 
 export function dayPos(day: Date, b: Pick<Booking, 'startAt' | 'endAt'>): DayPos {
@@ -233,10 +338,10 @@ export function planForDay(day: Date, bookings: readonly Booking[]): DayPlan {
     plan.sessions[s] = [...pinnedFront, ...rest]
   }
 
-  // "Staying tonight at X" pinned to the END of the night session (only if not checking out tonight)
-  if (sleepingTonight) {
-    plan.sessions.night.push({ kind: 'staying-tonight', booking: sleepingTonight })
-  }
+  // (The "Staying tonight at X" text row has been replaced by the coloured
+  // accommodation bar under each day header. See sleepingTonightFor() + the
+  // colour palette helpers above.)
+  void sleepingTonight
 
   return plan
 }

@@ -93,6 +93,9 @@ model Trip {
   // AI-generated local info for the destination (tipping, power, phrases, etc.)
   localInfoJson String?  // JSON blob — see lib/local-info.ts for shape
 
+  // Colour palette for accommodation bars in itinerary: 'pastel' | 'jewel' | 'mono'
+  colorPalette  String   @default("pastel")
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

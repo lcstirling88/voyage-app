@@ -7,6 +7,32 @@ import { deriveThemeFromDestination, themes, themeOptions, type ThemeKey } from 
 
 const DEFAULT_CURRENCIES = ['AUD', 'USD', 'GBP', 'EUR', 'NZD', 'JPY', 'SGD']
 
+function PaletteOption({
+  value, current, onPick, label, sample,
+}: {
+  value: string
+  current: string
+  onPick: (v: string) => void
+  label: string
+  sample: string[]
+}) {
+  const active = current === value
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(value)}
+      className={`text-left rounded-lg border p-3 transition ${active ? 'border-ink shadow-soft' : 'border-line hover:border-ink-muted'}`}
+    >
+      <div className="flex gap-1 mb-2">
+        {sample.map((c, i) => (
+          <span key={i} className="h-3 flex-1 rounded-sm" style={{ background: c }} />
+        ))}
+      </div>
+      <div className="text-xs font-medium">{label}</div>
+    </button>
+  )
+}
+
 type TripData = {
   id: string
   name: string
@@ -21,6 +47,7 @@ type TripData = {
   adultCount: number
   childCount: number
   childrenAges: string | null
+  colorPalette: string
   inboxToken: string
   bookingsCount: number
   documentsCount: number
@@ -40,6 +67,7 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
   const [adultCount, setAdultCount] = useState(trip.adultCount ?? 1)
   const [childCount, setChildCount] = useState(trip.childCount ?? 0)
   const [childrenAges, setChildrenAges] = useState(trip.childrenAges ?? '')
+  const [colorPalette, setColorPalette] = useState(trip.colorPalette || 'pastel')
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -71,6 +99,7 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
     fd.set('adultCount', String(adultCount))
     fd.set('childCount', String(childCount))
     fd.set('childrenAges', childrenAges)
+    fd.set('colorPalette', colorPalette)
     startTransition(async () => {
       const res = (await editTrip(fd)) as EditTripResult
       if (res.ok === false) setError(res.error)
@@ -160,6 +189,18 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
               <input className="input mt-1.5" value={childrenAges} onChange={(e) => setChildrenAges(e.target.value)} placeholder="e.g. 8, 11" />
             </div>
           )}
+          <div className="col-span-2">
+            <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Accommodation colour scheme</label>
+            <div className="grid grid-cols-3 gap-2 mt-1.5">
+              <PaletteOption value="pastel" current={colorPalette} onPick={setColorPalette}
+                label="Pastel" sample={['#E8C9C9', '#CBDCE8', '#CFE5D2', '#E8DFC4']} />
+              <PaletteOption value="jewel" current={colorPalette} onPick={setColorPalette}
+                label="Jewel" sample={['#2E5A47', '#2A4A72', '#7A2E3A', '#503279']} />
+              <PaletteOption value="mono" current={colorPalette} onPick={setColorPalette}
+                label="Mono" sample={['#3F5B4E', '#3F5B4E', '#3F5B4E', '#3F5B4E']} />
+            </div>
+            <p className="text-xs text-ink-muted mt-2">Each hotel in your trip gets a distinct colour bar under the day header.</p>
+          </div>
         </section>
 
         {error && (
