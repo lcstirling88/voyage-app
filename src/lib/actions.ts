@@ -1,6 +1,7 @@
 'use server'
 
 import { randomBytes } from 'crypto'
+import { format } from 'date-fns'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { Resend } from 'resend'
@@ -8,6 +9,7 @@ import { prisma } from './db'
 import { parseEmail, type ParserResult } from './email-parser'
 import { deriveThemeFromDestination, type ThemeKey } from './theme'
 import { requireUser, requireTripAccess } from './session'
+import { getAnthropic, PARSER_MODEL } from './anthropic'
 
 // ----- Trip creation ----------------------------------------------------------------
 
@@ -147,6 +149,115 @@ export async function createTrip(formData: FormData): Promise<CreateTripResult> 
 
   revalidatePath('/trips')
   redirect(`/trips/${slug}/inbox`)
+}
+
+// ----- AI activity suggestions ------------------------------------------------------
+
+export type Suggestion = {
+  title: string
+  time: string                                          // "HH:MM" 24h
+  type: 'activity' | 'restaurant' | 'transit' | 'other'
+  location?: string
+  durationMinutes?: number
+  notes: string
+  estimatedCost?: number
+  estimatedCurrency?: string
+}
+
+export type SuggestResult =
+  | { ok: true; suggestions: Suggestion[] }
+  | { ok: false; error: string }
+
+export async function suggestActivities(formData: FormData): Promise<SuggestResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  const date = String(formData.get('date') ?? '')        // YYYY-MM-DD
+  const session = String(formData.get('session') ?? '')  // morning|afternoon|night|''
+  const query = String(formData.get('query') ?? '').trim()
+
+  if (!tripSlug || !date) return { ok: false, error: 'Missing trip or date.' }
+  if (!query) return { ok: false, error: "Tell me what you're after." }
+
+  const anthropic = getAnthropic()
+  if (!anthropic) {
+    return { ok: false, error: 'AI not configured. Add ANTHROPIC_API_KEY to your environment.' }
+  }
+
+  const { trip } = await requireTripAccess(tripSlug)
+
+  // Gather context: same-day bookings + nearby days' last/next items
+  const dayStart = new Date(date + 'T00:00:00Z')
+  const dayEnd = new Date(date + 'T23:59:59Z')
+  const sameDay = await prisma.booking.findMany({
+    where: { tripId: trip.id, startAt: { gte: dayStart, lte: dayEnd } },
+    orderBy: { startAt: 'asc' },
+  })
+
+  const tripContext =
+    `Trip name: ${trip.name}\n` +
+    `Destination: ${trip.destination}\n` +
+    `Trip dates: ${format(trip.startDate, 'yyyy-MM-dd')} to ${format(trip.endDate, 'yyyy-MM-dd')}\n` +
+    `Travellers: ${trip.travelerNames ?? '(not specified)'}\n` +
+    `Home currency: ${trip.homeCurrency}\n` +
+    `Requested day: ${date}${session ? ` (${session})` : ''}\n` +
+    `Already on this day:\n` +
+    (sameDay.length === 0
+      ? '  (nothing yet)\n'
+      : sameDay.map((b) => `  - ${b.title} (${b.type}) at ${format(b.startAt, 'HH:mm')}`).join('\n'))
+
+  try {
+    const response = await anthropic.messages.create({
+      model: PARSER_MODEL,
+      max_tokens: 2048,
+      system:
+        `You are an expert travel concierge with deep, current local knowledge. ` +
+        `Suggest specific, NAMED, actionable activities/restaurants/things to do based on the trip context and the user's request. ` +
+        `Avoid generic answers ("find a cafe", "explore the town") — name real businesses, attractions, tours, neighborhoods, dishes. ` +
+        `Each suggestion should slot naturally into the requested session (morning / afternoon / night). ` +
+        `Use 24h time format (HH:MM). Keep notes to 1-2 sentences — why it's a good fit. ` +
+        `Return up to 3 suggestions. If the user's request doesn't make sense or is too vague, still try your best.`,
+      tools: [{
+        name: 'suggest_activities',
+        description: 'Return up to 3 specific travel suggestions for the given day/session.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            suggestions: {
+              type: 'array' as const,
+              minItems: 1,
+              maxItems: 3,
+              items: {
+                type: 'object' as const,
+                properties: {
+                  title: { type: 'string' as const, description: 'Specific, named place or activity' },
+                  time: { type: 'string' as const, description: '24h "HH:MM"' },
+                  type: { type: 'string' as const, enum: ['activity', 'restaurant', 'transit', 'other'] },
+                  location: { type: 'string' as const, description: 'Address or neighborhood' },
+                  durationMinutes: { type: 'number' as const },
+                  notes: { type: 'string' as const, description: '1-2 sentences why this fits' },
+                  estimatedCost: { type: 'number' as const, description: 'Per person, in local currency' },
+                  estimatedCurrency: { type: 'string' as const, description: 'ISO 4217 e.g. NZD, AUD' },
+                },
+                required: ['title', 'time', 'type', 'notes'],
+              },
+            },
+          },
+          required: ['suggestions'],
+        },
+      }],
+      tool_choice: { type: 'tool', name: 'suggest_activities' },
+      messages: [{ role: 'user', content: `${tripContext}\n\nUser request: ${query}` }],
+    })
+
+    const toolUse = response.content.find((c) => c.type === 'tool_use')
+    if (!toolUse || toolUse.type !== 'tool_use') {
+      return { ok: false, error: 'AI did not return suggestions.' }
+    }
+    const out = toolUse.input as { suggestions: Suggestion[] }
+    return { ok: true, suggestions: out.suggestions ?? [] }
+  } catch (err) {
+    console.error('[suggestActivities] error:', err)
+    return { ok: false, error: 'AI request failed. Try again in a moment.' }
+  }
 }
 
 // ----- Manual booking add -----------------------------------------------------------

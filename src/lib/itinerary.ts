@@ -1,17 +1,25 @@
 /**
  * Day-by-day itinerary grouping logic.
  *
- * Given a list of bookings and a specific day, decide:
- *   - Which hotel you're sleeping at tonight (the carry-forward rule)
- *   - Whether you check out from a different hotel today
- *   - Whether you pick up / return a rental car today
- *   - What goes into morning, afternoon, and night sessions
+ * Given a list of bookings and a specific day, decide what shows up in each
+ * morning / afternoon / night session. Hotels and cars get special treatment:
  *
- * Used by /trips/[tripSlug]/itinerary to render each day uniformly.
+ *   - Hotel CHECK-IN  → full card pinned to the start of the session matching
+ *                       its check-in time (e.g. 15:00 → afternoon)
+ *   - Hotel CHECK-OUT → compact row pinned to the start of the session matching
+ *                       its check-out time (e.g. 10:00 → morning)
+ *   - Hotel STAYING   → compact "staying tonight" row pinned to the END of the
+ *                       night session, on every stay night (not checkout night)
+ *   - Car PICKUP / RETURN → shown in the session matching the time, only on
+ *                           pickup day and return day (no middle days)
+ *   - Everything else (activity, restaurant, flight, transit) → in the session
+ *                           matching startAt's hour. Activities also repeat across
+ *                           multi-day spans with a "Day N of M" pill.
  */
 
-import { startOfDay, isBefore, isAfter, isEqual, subDays } from 'date-fns'
+import { startOfDay, isBefore, isAfter, isEqual } from 'date-fns'
 import type { Booking } from '@prisma/client'
+import { safeJson } from './format'
 
 export type Session = 'morning' | 'afternoon' | 'night'
 
@@ -23,7 +31,6 @@ export const SESSION_LABEL: Record<Session, string> = {
   night: 'Night',
 }
 
-// Default hour for a manually-added item if user hasn't picked a time yet.
 export const SESSION_DEFAULT_HOUR: Record<Session, number> = {
   morning: 9,
   afternoon: 13,
@@ -42,7 +49,6 @@ export function dayPos(day: Date, b: Pick<Booking, 'startAt' | 'endAt'>): DayPos
   const target = startOfDay(day)
   const start = startOfDay(b.startAt)
   const end = startOfDay(b.endAt ?? b.startAt)
-
   if (isBefore(target, start)) return 'before'
   if (isAfter(target, end)) return 'after'
   if (isEqual(start, end)) return isEqual(target, start) ? 'single' : 'after'
@@ -51,65 +57,150 @@ export function dayPos(day: Date, b: Pick<Booking, 'startAt' | 'endAt'>): DayPos
   return 'middle'
 }
 
-export type DayPlan = {
-  sleepingTonight: Booking | null      // hotel where you'll sleep this night (start..end-1)
-  checkingOutToday: Booking | null     // hotel you check out from this morning
-  carPickup: Booking | null            // rental car pickup today
-  carReturn: Booking | null            // rental car return today
-  sessions: Record<Session, Array<{ booking: Booking; position: DayPos }>>
-}
+// ---------- Time parsing & formatting -----------------------------------------------
 
-const emptyPlan = (): DayPlan => ({
-  sleepingTonight: null,
-  checkingOutToday: null,
-  carPickup: null,
-  carReturn: null,
-  sessions: { morning: [], afternoon: [], night: [] },
-})
+export type ParsedTime = { hour: number; minute: number; display: string }
 
 /**
- * Multi-day "always-every-day" types: a 4-day ski lesson should appear on all 4 days.
- * Single-day-event types (flights, restaurants, transit hops) show only on their startAt day,
- * even if endAt happens to be the next morning.
+ * Extract HH:MM and a human display from various string formats Claude or
+ * the user might produce: ISO datetimes, "15:00", "3pm", "3:00 PM", etc.
  */
+export function parseTimeString(value: string | null | undefined): ParsedTime | null {
+  if (!value) return null
+  const v = String(value).trim()
+
+  // Full ISO datetime (e.g. "2026-06-18T08:00:00+12:00")
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)) {
+    // We want the time-of-day as Claude wrote it (in destination-local time).
+    // Strip any trailing Z or ±HH:MM offset and just read hours/minutes from the literal.
+    const m = v.match(/T(\d{2}):(\d{2})/)
+    if (m) return makeParsedTime(parseInt(m[1], 10), parseInt(m[2], 10))
+  }
+
+  // 24h "HH:MM"
+  const hhmm = v.match(/^(\d{1,2}):(\d{2})\s*$/)
+  if (hhmm) return makeParsedTime(parseInt(hhmm[1], 10), parseInt(hhmm[2], 10))
+
+  // 12h "3pm", "3:00 PM", "3 PM"
+  const ampm = v.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)/i)
+  if (ampm) {
+    let h = parseInt(ampm[1], 10)
+    const m = ampm[2] ? parseInt(ampm[2], 10) : 0
+    const isPm = /p/i.test(ampm[3])
+    if (isPm && h < 12) h += 12
+    if (!isPm && h === 12) h = 0
+    return makeParsedTime(h, m)
+  }
+
+  // Bare number "3" → assume hour (skip — too ambiguous, return null)
+  return null
+}
+
+function makeParsedTime(h: number, m: number): ParsedTime {
+  const safeH = Math.max(0, Math.min(23, h))
+  const safeM = Math.max(0, Math.min(59, m))
+  const ampm = safeH >= 12 ? 'pm' : 'am'
+  const h12 = safeH % 12 || 12
+  const display = `${h12}:${String(safeM).padStart(2, '0')}${ampm}`
+  return { hour: safeH, minute: safeM, display }
+}
+
+export function formatTime(value: string | null | undefined, fallback = '—'): string {
+  return parseTimeString(value)?.display ?? (value || fallback)
+}
+
+// ---------- Day plan ----------------------------------------------------------------
+
+export type SessionItem =
+  | { kind: 'booking'; booking: Booking; position: DayPos; sortHour: number; sortMinute: number }
+  | { kind: 'hotel-checkin'; booking: Booking; time: ParsedTime | null }
+  | { kind: 'hotel-checkout'; booking: Booking; time: ParsedTime | null }
+  | { kind: 'car-pickup'; booking: Booking; time: ParsedTime }
+  | { kind: 'car-return'; booking: Booking; time: ParsedTime }
+  | { kind: 'staying-tonight'; booking: Booking }
+
+export type DayPlan = {
+  sessions: Record<Session, SessionItem[]>
+}
+
+// Multi-day activities and (now) restaurants/etc. only repeat if the type allows it.
 const ALWAYS_EXPAND_TYPES = new Set(['activity'])
 
 export function planForDay(day: Date, bookings: readonly Booking[]): DayPlan {
-  const plan = emptyPlan()
+  const plan: DayPlan = { sessions: { morning: [], afternoon: [], night: [] } }
+  let sleepingTonight: Booking | null = null
 
   for (const b of bookings) {
     const pos = dayPos(day, b)
     if (pos === 'before' || pos === 'after') continue
 
     if (b.type === 'hotel') {
-      // Hotel covers nights between startAt date and endAt-1 (you check out the morning of endAt).
-      // - 'first' or 'middle' positions → you're sleeping there tonight
-      // - 'last' position → you check out this morning, NOT sleeping there tonight
-      // - 'single' (same-day check-in/out, rare) → check out today
-      if (pos === 'first' || pos === 'middle') plan.sleepingTonight = b
-      if (pos === 'last' || pos === 'single') plan.checkingOutToday = b
+      const meta = safeJson<Record<string, string>>(b.metadata) ?? {}
+      const checkInTime = parseTimeString(meta.checkIn)
+      const checkOutTime = parseTimeString(meta.checkOut)
+
+      if (pos === 'first') {
+        // Full check-in card in the session matching check-in time (default afternoon)
+        const session: Session = checkInTime ? sessionForHour(checkInTime.hour) : 'afternoon'
+        plan.sessions[session].unshift({ kind: 'hotel-checkin', booking: b, time: checkInTime })
+        sleepingTonight = b
+      } else if (pos === 'middle') {
+        sleepingTonight = b
+      } else if (pos === 'last') {
+        // Check-out row in the session matching check-out time (default morning)
+        const session: Session = checkOutTime ? sessionForHour(checkOutTime.hour) : 'morning'
+        plan.sessions[session].unshift({ kind: 'hotel-checkout', booking: b, time: checkOutTime })
+        // No "staying tonight" — they're leaving
+      } else if (pos === 'single') {
+        // Same-day check-in/out — show checkout row only
+        const session: Session = checkOutTime ? sessionForHour(checkOutTime.hour) : 'morning'
+        plan.sessions[session].unshift({ kind: 'hotel-checkout', booking: b, time: checkOutTime })
+      }
       continue
     }
 
     if (b.type === 'car') {
-      // Car hire is the only type that doesn't show in the middle days of its span.
-      if (pos === 'first' || pos === 'single') plan.carPickup = b
-      else if (pos === 'last') plan.carReturn = b
+      if (pos === 'first' || pos === 'single') {
+        const t = makeParsedTime(b.startAt.getUTCHours(), b.startAt.getUTCMinutes())
+        plan.sessions[sessionForHour(t.hour)].push({ kind: 'car-pickup', booking: b, time: t })
+      } else if (pos === 'last') {
+        const endTime = b.endAt ?? b.startAt
+        const t = makeParsedTime(endTime.getUTCHours(), endTime.getUTCMinutes())
+        plan.sessions[sessionForHour(t.hour)].push({ kind: 'car-return', booking: b, time: t })
+      }
+      // 'middle' days: skip
       continue
     }
 
-    // Everything else (activity, restaurant, flight, transit, other):
-    if (pos === 'middle' || pos === 'last') {
-      // Multi-day-spanning case: only show on every day for ALWAYS_EXPAND_TYPES
-      if (!ALWAYS_EXPAND_TYPES.has(b.type)) continue
-    }
-    const session = sessionForHour(b.startAt.getUTCHours())
-    plan.sessions[session].push({ booking: b, position: pos })
+    // Activity, restaurant, flight, transit, other
+    if ((pos === 'middle' || pos === 'last') && !ALWAYS_EXPAND_TYPES.has(b.type)) continue
+    const hour = b.startAt.getUTCHours()
+    const minute = b.startAt.getUTCMinutes()
+    plan.sessions[sessionForHour(hour)].push({
+      kind: 'booking', booking: b, position: pos, sortHour: hour, sortMinute: minute,
+    })
   }
 
-  // Sort each session by start time
+  // Sort each session's regular items by time; keep pinned hotel-checkin/out at the front
   for (const s of SESSIONS) {
-    plan.sessions[s].sort((a, b) => a.booking.startAt.getTime() - b.booking.startAt.getTime())
+    const items = plan.sessions[s]
+    const pinnedFront = items.filter((i) => i.kind === 'hotel-checkin' || i.kind === 'hotel-checkout')
+    const rest = items.filter((i) => i.kind !== 'hotel-checkin' && i.kind !== 'hotel-checkout')
+    rest.sort((a, b) => {
+      const ah = a.kind === 'booking' ? a.sortHour * 60 + a.sortMinute
+               : a.kind === 'car-pickup' || a.kind === 'car-return' ? a.time.hour * 60 + a.time.minute
+               : 0
+      const bh = b.kind === 'booking' ? b.sortHour * 60 + b.sortMinute
+               : b.kind === 'car-pickup' || b.kind === 'car-return' ? b.time.hour * 60 + b.time.minute
+               : 0
+      return ah - bh
+    })
+    plan.sessions[s] = [...pinnedFront, ...rest]
+  }
+
+  // "Staying tonight at X" pinned to the END of the night session (only if not checking out tonight)
+  if (sleepingTonight) {
+    plan.sessions.night.push({ kind: 'staying-tonight', booking: sleepingTonight })
   }
 
   return plan

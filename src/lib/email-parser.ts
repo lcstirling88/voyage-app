@@ -144,7 +144,7 @@ async function parseWithClaude(email: EmailInput): Promise<ParserResult> {
 
   const systemPrompt = `You extract structured travel bookings from emails. You will be given a single email (subject, from, body). Call the \`save_parsed_email\` tool exactly once with everything you can extract.
 
-Guidelines:
+GUIDELINES:
 - One email can contain multiple bookings (e.g. a flight itinerary with outbound + return, or a hotel + airport transfer).
 - Hotel emails: type "hotel", startAt = check-in datetime, endAt = check-out datetime, put breakfast/checkIn/checkOut/nights in metadata.
 - Flight emails: type "flight", startAt = departure, endAt = arrival, put seats/class/baggage in metadata.
@@ -154,7 +154,15 @@ Guidelines:
 - If the email is a visa approval, insurance policy, or similar non-booking document, return it under documents instead of bookings.
 - If the email mentions a future automatic charge (e.g. final balance auto-billed on a date), include it under payments.
 - If you can't extract anything useful, return empty arrays but still write a summary.
-- Be conservative — only include fields you're confident about. Don't fabricate confirmation codes or addresses.`
+- Be conservative — only include fields you're confident about. Don't fabricate confirmation codes or addresses.
+
+TIME EXTRACTION — READ CAREFULLY:
+- The booking's startAt time MUST be when the activity itself BEGINS for the customer (lesson start, drop-off time, tour departure, table reservation, flight departure, train departure, check-in).
+- Do NOT use: confirmation timestamps, "valid from" times, gear pickup times, parking validation times, contact-us-by times, or marketing-event times.
+- For multi-session activities (ski school, language course, daily yoga): use the daily start time, not when the program "ends" or "concludes".
+- For ambiguous emails with multiple times mentioned: pick the time the customer actually has to BE somewhere to participate. When in doubt, prefer the earlier action time over a later collection time.
+- AM vs PM: be extra careful. Most activities run during daylight hours; if you see "8:30" with no qualifier and context suggests morning (ski lessons, school programs, sunrise tours), use 08:30 not 20:30. Only use PM times when explicitly stated (e.g. "20:30", "8:30 PM", "evening").
+- All datetimes must be ISO 8601 with explicit timezone offset matching the destination's local time. If the email is in a different timezone than the destination, convert accordingly.`
 
   const userContent = `Subject: ${email.subject}
 From: ${email.from}

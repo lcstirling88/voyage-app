@@ -1,12 +1,15 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Check, Clock, Utensils, PlaneLanding, Car, BedDouble, LogOut, MapPin, Plane, Train } from 'lucide-react'
-import { format, startOfDay, eachDayOfInterval, differenceInDays, addDays } from 'date-fns'
+import { Check, Clock, Utensils, Plane, Train, Car, BedDouble, LogOut, Plus } from 'lucide-react'
+import { format, startOfDay, eachDayOfInterval, differenceInDays } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
 import { fmtTime, safeJson, fmtMoneyFull } from '@/lib/format'
 import { InlineDeleteButton } from '@/components/InlineDeleteButton'
-import { AddSessionItemClient } from '@/components/AddSessionItemClient'
-import { planForDay, SESSIONS, SESSION_LABEL, type DayPlan, type Session } from '@/lib/itinerary'
+import {
+  planForDay, SESSIONS, SESSION_LABEL, formatTime,
+  type DayPlan, type Session, type SessionItem, type ParsedTime,
+} from '@/lib/itinerary'
 import type { Booking } from '@prisma/client'
 
 function imgForBooking(type: string, title: string) {
@@ -57,7 +60,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">The plan</div>
         <h1 className="h-display text-4xl sm:text-6xl mt-2">Day by day</h1>
         <p className="text-ink-muted mt-3 max-w-xl text-sm sm:text-base">
-          Three sessions a day. Tap an empty slot to add manually or ask the AI for ideas.
+          Three sessions a day. Tap the <span className="num-mono">+</span> next to any day to add manually or ask the AI.
           Forward booking emails to fill more in automatically.
         </p>
       </div>
@@ -65,17 +68,16 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
       <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-5xl space-y-10 sm:space-y-12">
         {days.map((day, idx) => {
           const plan = planForDay(day, trip.bookings)
-          const dayKey = format(day, 'yyyy-MM-dd')
+          const dateKey = format(day, 'yyyy-MM-dd')
           return (
             <DayBlock
-              key={dayKey}
+              key={dateKey}
               day={day}
-              dayKey={dayKey}
+              dateKey={dateKey}
               idx={idx}
               plan={plan}
               tripSlug={trip.slug}
               homeCurrency={trip.homeCurrency}
-              currentDate={day}
             />
           )
         })}
@@ -85,51 +87,45 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
 }
 
 // ============================================================================
-// Day block — hotel context, car bar, three session blocks
+// Day block — header with single "+" + three session blocks
 // ============================================================================
 
 function DayBlock({
-  day, dayKey, idx, plan, tripSlug, homeCurrency, currentDate,
+  day, dateKey, idx, plan, tripSlug, homeCurrency,
 }: {
   day: Date
-  dayKey: string
+  dateKey: string
   idx: number
   plan: DayPlan
   tripSlug: string
   homeCurrency: string
-  currentDate: Date
 }) {
   return (
     <div className="tline pl-8 sm:pl-10">
       <div className="tline-dot" />
-      <div className="flex flex-wrap items-baseline gap-2 sm:gap-4 mb-4">
+      <div className="flex items-center gap-3 mb-5">
         <span className="font-display text-3xl sm:text-4xl">Day {String(idx + 1).padStart(2, '0')}</span>
-        <span className="text-ink-muted text-xs sm:text-sm">{format(day, 'EEEE, MMM d')}</span>
+        <span className="text-ink-muted text-xs sm:text-sm flex-1 truncate">{format(day, 'EEEE, MMM d')}</span>
+        <Link
+          href={`/trips/${tripSlug}/itinerary/add?date=${dateKey}`}
+          aria-label="Add to this day"
+          title="Add manually or ask AI"
+          className="w-8 h-8 rounded-full border border-line bg-paper-pure hover:bg-ink hover:text-paper-pure hover:border-ink text-ink-muted grid place-items-center transition shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+        </Link>
       </div>
 
-      {/* Hotel bar — check-out info first (morning event), then sleeping-tonight */}
-      {plan.checkingOutToday && (
-        <HotelCheckoutRow booking={plan.checkingOutToday} tripSlug={tripSlug} />
-      )}
-      {plan.sleepingTonight && (
-        <HotelStayRow booking={plan.sleepingTonight} tripSlug={tripSlug} day={day} />
-      )}
-
-      {/* Car pickup/return */}
-      {plan.carPickup && <CarRow booking={plan.carPickup} kind="pickup" tripSlug={tripSlug} homeCurrency={homeCurrency} />}
-      {plan.carReturn && <CarRow booking={plan.carReturn} kind="return" tripSlug={tripSlug} homeCurrency={homeCurrency} />}
-
-      {/* Three session blocks */}
-      <div className="mt-4 space-y-5">
+      <div className="space-y-6">
         {SESSIONS.map((session) => (
           <SessionBlock
             key={session}
             session={session}
             items={plan.sessions[session]}
             tripSlug={tripSlug}
-            dayKey={dayKey}
+            currentDate={day}
+            dateKey={dateKey}
             homeCurrency={homeCurrency}
-            currentDate={currentDate}
           />
         ))}
       </div>
@@ -138,16 +134,93 @@ function DayBlock({
 }
 
 // ============================================================================
+// Session block
+// ============================================================================
+
+function SessionBlock({
+  session, items, tripSlug, currentDate, dateKey, homeCurrency,
+}: {
+  session: Session
+  items: SessionItem[]
+  tripSlug: string
+  currentDate: Date
+  dateKey: string
+  homeCurrency: string
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-[10px] uppercase tracking-[0.22em] text-ink-muted font-medium">
+          {SESSION_LABEL[session]}
+        </span>
+        <span className="flex-1 h-px bg-line-soft" />
+      </div>
+
+      {items.length === 0 ? (
+        <Link
+          href={`/trips/${tripSlug}/itinerary/add?date=${dateKey}&session=${session}`}
+          className="text-xs text-ink-muted/60 italic hover:text-ink-muted transition px-1"
+        >
+          Nothing planned · tap <span className="num-mono">+</span> above to add
+        </Link>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item, i) => (
+            <ItemRow
+              key={item.kind === 'booking' ? item.booking.id + ':' + i : item.kind + ':' + item.booking.id + ':' + i}
+              item={item}
+              tripSlug={tripSlug}
+              currentDate={currentDate}
+              homeCurrency={homeCurrency}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// Item row (dispatcher) — different render per item kind
+// ============================================================================
+
+function ItemRow({
+  item, tripSlug, currentDate, homeCurrency,
+}: {
+  item: SessionItem
+  tripSlug: string
+  currentDate: Date
+  homeCurrency: string
+}) {
+  switch (item.kind) {
+    case 'hotel-checkin':
+      return <HotelCheckinCard booking={item.booking} time={item.time} tripSlug={tripSlug} />
+    case 'hotel-checkout':
+      return <HotelCheckoutRow booking={item.booking} time={item.time} tripSlug={tripSlug} />
+    case 'staying-tonight':
+      return <StayingTonightRow booking={item.booking} />
+    case 'car-pickup':
+      return <CarRow booking={item.booking} kind="pickup" time={item.time} tripSlug={tripSlug} />
+    case 'car-return':
+      return <CarRow booking={item.booking} kind="return" time={item.time} tripSlug={tripSlug} />
+    case 'booking':
+      return <BookingRow booking={item.booking} position={item.position} tripSlug={tripSlug} homeCurrency={homeCurrency} currentDate={currentDate} />
+  }
+}
+
+// ============================================================================
 // Hotel rows
 // ============================================================================
 
-function HotelCheckinFull({ booking, tripSlug }: { booking: Booking; tripSlug: string }) {
+function HotelCheckinCard({ booking, time, tripSlug }: { booking: Booking; time: ParsedTime | null; tripSlug: string }) {
   const meta = safeJson<Record<string, string>>(booking.metadata) ?? {}
   return (
-    <div className="border border-line rounded-xl bg-paper-pure overflow-hidden mb-3">
+    <div className="border border-line rounded-xl bg-paper-pure overflow-hidden">
       <div className="flex flex-col sm:flex-row">
         <div className={`h-24 sm:h-auto sm:w-40 ${imgForBooking(booking.type, booking.title)} shrink-0 relative`}>
-          <div className="absolute bottom-2 left-2 text-paper-pure text-[10px] uppercase tracking-[0.18em] bg-ink/40 backdrop-blur px-2 py-1 rounded">Check in</div>
+          <div className="absolute bottom-2 left-2 text-paper-pure text-[10px] uppercase tracking-[0.18em] bg-ink/40 backdrop-blur px-2 py-1 rounded">
+            Check in{time ? ` · ${time.display}` : ''}
+          </div>
         </div>
         <div className="p-4 sm:p-5 flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
@@ -168,8 +241,8 @@ function HotelCheckinFull({ booking, tripSlug }: { booking: Booking; tripSlug: s
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-4 text-xs">
-            <div><div className="text-ink-muted">Check-in</div><div className="font-medium mt-0.5">{meta.checkIn ?? '—'}</div></div>
-            <div><div className="text-ink-muted">Check-out</div><div className="font-medium mt-0.5">{meta.checkOut ?? '—'}</div></div>
+            <div><div className="text-ink-muted">Check-in</div><div className="font-medium mt-0.5">{formatTime(meta.checkIn, '—')}</div></div>
+            <div><div className="text-ink-muted">Check-out</div><div className="font-medium mt-0.5">{formatTime(meta.checkOut, '—')}</div></div>
             <div><div className="text-ink-muted">Breakfast</div><div className="font-medium mt-0.5 text-sage truncate">{meta.breakfast ?? '—'}</div></div>
             <div><div className="text-ink-muted">Confirmation</div><div className="font-medium mt-0.5 num-mono truncate">{booking.confirmationCode ?? '—'}</div></div>
           </div>
@@ -179,42 +252,29 @@ function HotelCheckinFull({ booking, tripSlug }: { booking: Booking; tripSlug: s
   )
 }
 
-function HotelStayRow({ booking, tripSlug, day }: { booking: Booking; tripSlug: string; day: Date }) {
-  // First night = check-in day → full card; later nights → compact
-  const isFirstNight = startOfDay(booking.startAt).getTime() === startOfDay(day).getTime()
-  if (isFirstNight) return <HotelCheckinFull booking={booking} tripSlug={tripSlug} />
-
-  const totalNights = booking.endAt
-    ? differenceInDays(startOfDay(booking.endAt), startOfDay(booking.startAt))
-    : 1
-  const nightNumber = differenceInDays(startOfDay(day), startOfDay(booking.startAt)) + 1
-
+function HotelCheckoutRow({ booking, time, tripSlug }: { booking: Booking; time: ParsedTime | null; tripSlug: string }) {
   return (
-    <div className="border border-line rounded-lg bg-paper-pure px-4 py-2.5 mb-2 flex items-center gap-3 text-sm">
-      <BedDouble className="w-4 h-4 text-ink-muted shrink-0" />
-      <div className="flex-1 min-w-0">
-        <span className="text-ink-muted">Staying at</span>{' '}
-        <span className="font-medium">{booking.title}</span>
-        {totalNights > 1 && (
-          <span className="text-ink-muted text-xs ml-2 num-mono">(night {nightNumber} of {totalNights})</span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function HotelCheckoutRow({ booking, tripSlug }: { booking: Booking; tripSlug: string }) {
-  const meta = safeJson<Record<string, string>>(booking.metadata) ?? {}
-  return (
-    <div className="border border-line rounded-lg bg-paper-pure px-4 py-2.5 mb-2 flex items-center gap-3 text-sm">
+    <div className="border border-line rounded-lg bg-paper-pure px-4 py-2.5 flex items-center gap-3 text-sm">
       <LogOut className="w-4 h-4 text-rust shrink-0" />
       <div className="flex-1 min-w-0">
         <span className="text-ink-muted">Check out</span>{' '}
-        {meta.checkOut && <span className="num-mono">{meta.checkOut}</span>}{' '}
+        {time && <span className="num-mono">{time.display}</span>}{' '}
         <span className="text-ink-muted">from</span>{' '}
         <span className="font-medium">{booking.title}</span>
       </div>
       <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
+    </div>
+  )
+}
+
+function StayingTonightRow({ booking }: { booking: Booking }) {
+  return (
+    <div className="border border-line/60 rounded-lg bg-paper/40 px-4 py-2.5 flex items-center gap-3 text-sm">
+      <BedDouble className="w-4 h-4 text-ink-muted shrink-0" />
+      <div className="flex-1 min-w-0">
+        <span className="text-ink-muted">Staying tonight at</span>{' '}
+        <span className="font-medium">{booking.title}</span>
+      </div>
     </div>
   )
 }
@@ -224,28 +284,30 @@ function HotelCheckoutRow({ booking, tripSlug }: { booking: Booking; tripSlug: s
 // ============================================================================
 
 function CarRow({
-  booking, kind, tripSlug, homeCurrency,
+  booking, kind, time, tripSlug,
 }: {
   booking: Booking
   kind: 'pickup' | 'return'
+  time: ParsedTime
   tripSlug: string
-  homeCurrency: string
 }) {
   const meta = safeJson<Record<string, string>>(booking.metadata) ?? {}
   const verb = kind === 'pickup' ? 'Pick up' : 'Return'
-  const time = kind === 'pickup' ? booking.startAt : (booking.endAt ?? booking.startAt)
+  const location = kind === 'pickup' ? booking.location : (meta.dropoffLocation ?? booking.location)
   return (
-    <div className="border border-line rounded-lg bg-paper-pure px-4 py-3 mb-2 flex items-start sm:items-center gap-3 text-sm">
-      <Car className="w-4 h-4 text-ink-muted shrink-0 mt-0.5 sm:mt-0" />
+    <div className="border border-line rounded-lg bg-paper-pure px-4 py-3 flex items-start sm:items-center gap-3 text-sm">
+      <div className="w-10 sm:w-12 text-center shrink-0">
+        <div className="num-mono text-xs text-ink-muted">{time.display}</div>
+      </div>
+      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-md ${imgForBooking('car', booking.title)} shrink-0 grid place-items-center`}>
+        <Car className="w-4 h-4 text-paper-pure" />
+      </div>
       <div className="flex-1 min-w-0">
-        <div>
-          <span className="text-ink-muted">{verb} rental car</span>{' '}
-          <span className="num-mono text-xs">{fmtTime(time)}</span>{' '}
-          <span className="text-ink-muted">·</span>{' '}
-          <span className="font-medium">{booking.title}</span>
-        </div>
-        {booking.location && <div className="text-xs text-ink-muted mt-0.5">{booking.location}</div>}
-        {meta.confirmationCode && <div className="text-xs text-ink-muted num-mono mt-0.5">{meta.confirmationCode}</div>}
+        <div className="font-medium text-sm sm:text-base truncate">{verb} · {booking.title}</div>
+        {location && <div className="text-xs text-ink-muted truncate">{location}</div>}
+        {booking.confirmationCode && (
+          <div className="text-xs num-mono text-ink-muted mt-0.5 truncate">{booking.confirmationCode}</div>
+        )}
       </div>
       <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
     </div>
@@ -253,42 +315,8 @@ function CarRow({
 }
 
 // ============================================================================
-// Session block (morning/afternoon/night)
+// Regular booking row (activity, restaurant, flight, transit, other)
 // ============================================================================
-
-function SessionBlock({
-  session, items, tripSlug, dayKey, homeCurrency, currentDate,
-}: {
-  session: Session
-  items: Array<{ booking: Booking; position: ReturnType<typeof planForDay>['sessions']['morning'][number]['position'] }>
-  tripSlug: string
-  dayKey: string
-  homeCurrency: string
-  currentDate: Date
-}) {
-  return (
-    <div>
-      <div className="flex items-center gap-3 mb-2">
-        <span className="text-[10px] uppercase tracking-[0.22em] text-ink-muted font-medium">
-          {SESSION_LABEL[session]}
-        </span>
-        <span className="flex-1 h-px bg-line-soft" />
-      </div>
-
-      {items.length === 0 ? (
-        <AddSessionItemClient tripSlug={tripSlug} day={dayKey} session={session} />
-      ) : (
-        <div className="space-y-2">
-          {items.map(({ booking, position }) => (
-            <BookingRow key={booking.id} booking={booking} position={position} tripSlug={tripSlug} homeCurrency={homeCurrency} currentDate={currentDate} />
-          ))}
-          {/* Allow adding more even when session has items */}
-          <AddSessionItemClient tripSlug={tripSlug} day={dayKey} session={session} />
-        </div>
-      )}
-    </div>
-  )
-}
 
 function BookingRow({
   booking, position, tripSlug, homeCurrency, currentDate,
@@ -299,8 +327,6 @@ function BookingRow({
   homeCurrency: string
   currentDate: Date
 }) {
-  const icon = iconForType(booking.type)
-  // For multi-day activities, show "Day N of M"
   let spanLabel: string | null = null
   if (booking.endAt && position !== 'single') {
     const total = differenceInDays(startOfDay(booking.endAt), startOfDay(booking.startAt)) + 1
@@ -316,7 +342,7 @@ function BookingRow({
         <div className="num-mono text-xs text-ink-muted">{fmtTime(booking.startAt)}</div>
       </div>
       <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-md ${imgForBooking(booking.type, booking.title)} shrink-0 grid place-items-center`}>
-        {icon}
+        {iconForType(booking.type)}
       </div>
       <div className="flex-1 min-w-0">
         <div className="font-medium truncate text-sm sm:text-base">{booking.title}</div>
