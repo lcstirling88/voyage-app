@@ -165,8 +165,25 @@ TIME EXTRACTION — READ CAREFULLY:
 - Do NOT use: confirmation timestamps, "valid from" times, gear pickup times, parking validation times, contact-us-by times, or marketing-event times.
 - For multi-session activities (ski school, language course, daily yoga): use the daily start time, not when the program "ends" or "concludes".
 - For ambiguous emails with multiple times mentioned: pick the time the customer actually has to BE somewhere to participate. When in doubt, prefer the earlier action time over a later collection time.
-- AM vs PM: be extra careful. Most activities run during daylight hours; if you see "8:30" with no qualifier and context suggests morning (ski lessons, school programs, sunrise tours), use 08:30 not 20:30. Only use PM times when explicitly stated (e.g. "20:30", "8:30 PM", "evening").
+
+AM / PM — THIS IS WHERE YOU MOST OFTEN GET IT WRONG. READ TWICE:
+- 24h notation: 12am midnight = 00:00. 12pm noon = 12:00. 1am = 01:00. 1pm = 13:00. 8am = 08:00. 8pm = 20:00. 11am = 11:00. 11pm = 23:00. NEVER swap these.
+- When the email says "3 PM" or "3:00 PM", that is 15:00 (afternoon), NOT 03:00 (middle of the night).
+- When the email says "3 AM" or "3:00 AM", that is 03:00 (middle of the night), NOT 15:00.
+- "08:30" in the email means 8:30 AM (morning). Do not output "20:30".
+- "20:30" in the email means 8:30 PM (evening). Do not output "08:30".
+
+CONTEXT SANITY CHECKS — apply these before finalising any time:
+- Hotel check-in default is 15:00 (3 PM). Almost never before noon. If you computed something like 03:00 for check-in, you almost certainly swapped AM/PM — fix it.
+- Hotel check-out default is 10:00–11:00 in the morning. If you computed 22:00 or later, you swapped AM/PM — fix it.
+- Rental car pickup is during business hours (08:00–20:00). 03:00 pickup is almost never correct.
+- School / kids' programs (ski school, kids' camps, school activities): drop-off is morning (typically 08:00–09:30). If you computed 20:30, swap to 08:30.
+- Sunset / aurora / stargazing tours: evening (17:00–22:00). Dawn / sunrise tours: very early morning (04:00–06:00).
+- Sit-down dinners (kaiseki, tasting menus, fine dining): 18:00–20:30. Breakfasts and brunches: 07:00–11:00.
+
+DATE / TIMEZONE:
 - All datetimes must be ISO 8601 with explicit timezone offset matching the destination's local time. If the email is in a different timezone than the destination, convert accordingly.
+- For hotels: startAt MUST be the check-in date (not the previous evening's purchase date, not the night before). endAt MUST be the check-out date. Number of nights = (endAt date - startAt date). Confirm these match before submitting.
 
 CANCELLATION POLICY:
 - If the email states a "free cancellation until [date]" deadline, populate cancelByAt with that datetime.

@@ -162,6 +162,140 @@ export async function createTrip(formData: FormData): Promise<CreateTripResult> 
   redirect(`/trips/${slug}/inbox`)
 }
 
+// ----- AI Local Info generation -----------------------------------------------------
+
+export type GenerateLocalInfoResult = { ok: true } | { ok: false; error: string }
+
+export async function generateLocalInfo(formData: FormData): Promise<GenerateLocalInfoResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!tripSlug) return { ok: false, error: 'Missing trip.' }
+  const anthropic = getAnthropic()
+  if (!anthropic) return { ok: false, error: 'AI not configured. Add ANTHROPIC_API_KEY.' }
+
+  const { trip } = await requireTripAccess(tripSlug)
+
+  try {
+    const response = await anthropic.messages.create({
+      model: PARSER_MODEL,
+      max_tokens: 4096,
+      system:
+        `You are an expert travel concierge generating ACCURATE, SPECIFIC local information for a traveler. ` +
+        `Avoid generic clichés — give real, actionable, current advice. Be honest about what travelers commonly get wrong. ` +
+        `For phrases: pick 8 most useful, ones a tourist will actually say. For emergency numbers: list the real numbers for that country plus relevant embassy / insurance hotlines where useful.`,
+      tools: [{
+        name: 'save_local_info',
+        description: 'Save structured local-info content for this destination.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            tipping: {
+              type: 'object' as const,
+              properties: {
+                summary: { type: 'string' as const, description: 'One-sentence summary of tipping culture.' },
+                rules: { type: 'array' as const, items: { type: 'string' as const }, description: '3-5 specific situations and what to do (e.g. "Restaurants: 10–15% if no service charge").' },
+              },
+              required: ['summary', 'rules'],
+            },
+            power: {
+              type: 'object' as const,
+              properties: {
+                type: { type: 'string' as const, description: 'Plug types, e.g. "Type I"' },
+                voltage: { type: 'string' as const, description: 'e.g. "230V"' },
+                frequency: { type: 'string' as const, description: 'e.g. "50Hz"' },
+                notes: { type: 'array' as const, items: { type: 'string' as const }, description: '2-3 practical notes' },
+              },
+              required: ['type', 'voltage', 'frequency', 'notes'],
+            },
+            cashVsCard: {
+              type: 'object' as const,
+              properties: {
+                summary: { type: 'string' as const },
+                notes: { type: 'array' as const, items: { type: 'string' as const }, description: '3-5 practical notes' },
+              },
+              required: ['summary', 'notes'],
+            },
+            connectivity: {
+              type: 'object' as const,
+              properties: {
+                summary: { type: 'string' as const },
+                notes: { type: 'array' as const, items: { type: 'string' as const }, description: '3-5 specific notes — coverage, carriers, eSIM availability' },
+              },
+              required: ['summary', 'notes'],
+            },
+            phrases: {
+              type: 'array' as const,
+              minItems: 6,
+              maxItems: 10,
+              items: {
+                type: 'object' as const,
+                properties: {
+                  phrase: { type: 'string' as const, description: 'Local-language phrase, romanised if non-Latin script' },
+                  translation: { type: 'string' as const, description: 'English meaning' },
+                },
+                required: ['phrase', 'translation'],
+              },
+            },
+            dontDoThis: {
+              type: 'array' as const,
+              minItems: 4,
+              maxItems: 8,
+              items: { type: 'string' as const, description: 'Specific cultural / etiquette warnings' },
+            },
+            emergencyNumbers: {
+              type: 'array' as const,
+              minItems: 2,
+              maxItems: 6,
+              items: {
+                type: 'object' as const,
+                properties: {
+                  label: { type: 'string' as const, description: 'e.g. "Police", "Ambulance", "AU Embassy [city]"' },
+                  number: { type: 'string' as const },
+                },
+                required: ['label', 'number'],
+              },
+            },
+            ruleOfThumbCurrency: { type: 'string' as const, description: 'A quick mental conversion tip from home currency to local, e.g. "Drop the last digit on yen for a rough AUD figure".' },
+          },
+          required: ['tipping', 'power', 'cashVsCard', 'connectivity', 'phrases', 'dontDoThis', 'emergencyNumbers'],
+        },
+      }],
+      tool_choice: { type: 'tool', name: 'save_local_info' },
+      messages: [{
+        role: 'user',
+        content:
+          `Generate local info for a traveler going to: ${trip.destination}\n` +
+          `Home country (for currency / embassy references): ${trip.homeCurrency} (Australia by default)\n` +
+          `Trip dates: ${trip.startDate.toISOString().slice(0,10)} to ${trip.endDate.toISOString().slice(0,10)}\n` +
+          `Travellers: ${trip.adultCount} adult(s), ${trip.childCount} child(ren)${trip.childrenAges ? ` aged ${trip.childrenAges}` : ''}\n` +
+          `Please tailor where relevant (e.g. family-friendly notes if children, embassy of home country, etc.).`,
+      }],
+    })
+
+    const toolUse = response.content.find((c) => c.type === 'tool_use')
+    if (!toolUse || toolUse.type !== 'tool_use') {
+      return { ok: false, error: 'AI did not return local info.' }
+    }
+    const input = toolUse.input as Record<string, unknown>
+
+    const localInfo = {
+      generatedAt: new Date().toISOString(),
+      destination: trip.destination,
+      ...input,
+    }
+
+    await prisma.trip.update({
+      where: { id: trip.id },
+      data: { localInfoJson: JSON.stringify(localInfo) },
+    })
+
+    revalidatePath(`/trips/${tripSlug}/local`)
+    return { ok: true }
+  } catch (err) {
+    console.error('[generateLocalInfo]', err)
+    return { ok: false, error: 'AI request failed. Try again.' }
+  }
+}
+
 // ----- AI activity suggestions ------------------------------------------------------
 
 export type Suggestion = {
@@ -533,6 +667,92 @@ export async function editTrip(formData: FormData): Promise<EditTripResult> {
   revalidatePath('/trips')
   revalidatePath(`/trips/${slug}`, 'layout')
   return { ok: true, slug }
+}
+
+// ----- Booking edit -----------------------------------------------------------------
+
+export type EditBookingResult = { ok: true; tripSlug: string } | { ok: false; error: string }
+
+export async function editBooking(formData: FormData): Promise<EditBookingResult> {
+  const id = String(formData.get('id') ?? '')
+  if (!id) return { ok: false, error: 'Missing booking id.' }
+
+  const existing = await prisma.booking.findUnique({
+    where: { id },
+    include: { trip: true },
+  })
+  if (!existing) return { ok: false, error: 'Booking not found.' }
+  await requireTripAccess(existing.trip.slug)
+
+  const type = String(formData.get('type') ?? existing.type).trim()
+  const title = String(formData.get('title') ?? '').trim()
+  if (!title) return { ok: false, error: 'Title is required.' }
+
+  const vendor = String(formData.get('vendor') ?? '').trim() || null
+  const dateStr = String(formData.get('date') ?? '')
+  const timeStr = String(formData.get('time') ?? '09:00')
+  const endDateStr = String(formData.get('endDate') ?? '')
+  const endTimeStr = String(formData.get('endTime') ?? '')
+  const location = String(formData.get('location') ?? '').trim() || null
+  const address = String(formData.get('address') ?? '').trim() || null
+  const confirmationCode = String(formData.get('confirmationCode') ?? '').trim() || null
+  const notes = String(formData.get('notes') ?? '').trim() || null
+  const costStr = String(formData.get('cost') ?? '').trim()
+  const cost = costStr ? parseFloat(costStr) : null
+  const currency = String(formData.get('currency') ?? existing.currency ?? '').trim().toUpperCase() || null
+  const paid = String(formData.get('paid') ?? '') === 'on'
+  const paymentMethod = String(formData.get('paymentMethod') ?? '').trim() || null
+  const cancelDateStr = String(formData.get('cancelDate') ?? '')
+  const cancelTimeStr = String(formData.get('cancelTime') ?? '23:59')
+  const cancellationPolicy = String(formData.get('cancellationPolicy') ?? '').trim() || null
+
+  // Hotel-specific metadata fields
+  const checkIn = String(formData.get('checkIn') ?? '').trim()
+  const checkOut = String(formData.get('checkOut') ?? '').trim()
+  const breakfast = String(formData.get('breakfast') ?? '').trim()
+
+  if (!dateStr) return { ok: false, error: 'Date is required.' }
+  const startAt = new Date(`${dateStr}T${timeStr || '09:00'}:00Z`)
+  if (isNaN(startAt.getTime())) return { ok: false, error: 'Invalid date/time.' }
+  let endAt: Date | null = null
+  if (endDateStr) {
+    endAt = new Date(`${endDateStr}T${endTimeStr || '23:59'}:00Z`)
+    if (isNaN(endAt.getTime())) return { ok: false, error: 'Invalid end date/time.' }
+    if (endAt < startAt) return { ok: false, error: 'End must be after start.' }
+  }
+  let cancelByAt: Date | null = null
+  if (cancelDateStr) {
+    cancelByAt = new Date(`${cancelDateStr}T${cancelTimeStr || '23:59'}:00Z`)
+    if (isNaN(cancelByAt.getTime())) return { ok: false, error: 'Invalid cancellation date.' }
+  }
+
+  // Merge metadata (keep prior keys; overwrite with new values when set)
+  const existingMeta = (() => {
+    try { return existing.metadata ? JSON.parse(existing.metadata) : {} } catch { return {} }
+  })() as Record<string, unknown>
+  const newMeta: Record<string, unknown> = { ...existingMeta }
+  if (type === 'hotel') {
+    if (checkIn) newMeta.checkIn = checkIn
+    if (checkOut) newMeta.checkOut = checkOut
+    if (breakfast) newMeta.breakfast = breakfast
+  }
+
+  await prisma.booking.update({
+    where: { id },
+    data: {
+      type, title, vendor,
+      startAt, endAt,
+      location, address, confirmationCode, notes,
+      cost, currency,
+      paid, paidAt: paid ? (existing.paidAt ?? new Date()) : null,
+      paymentMethod,
+      cancelByAt, cancellationPolicy,
+      metadata: Object.keys(newMeta).length > 0 ? JSON.stringify(newMeta) : null,
+    },
+  })
+
+  revalidatePath(`/trips/${existing.trip.slug}`, 'layout')
+  return { ok: true, tripSlug: existing.trip.slug }
 }
 
 // ----- Deletes ----------------------------------------------------------------------

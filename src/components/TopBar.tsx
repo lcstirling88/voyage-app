@@ -9,7 +9,11 @@ export function TopBar({ trip }: { trip: Trip }) {
   const profile = profileForDestination(trip.destination)
   const timezone = trip.timezone && trip.timezone !== 'UTC' ? trip.timezone : profile.timezone
   const localCurrency = trip.localCurrency ?? profile.currency
-  const cityLabel = trip.destination?.split(/[, ]/)[0] ?? profile.label
+  // Derive a friendly city label from the IANA timezone (Pacific/Auckland → "Auckland").
+  // Falls back to the destination's profile label, then to the raw destination.
+  const cityLabel = timezone.includes('/')
+    ? timezone.split('/').pop()!.replace(/_/g, ' ')
+    : (profile.label !== 'Unknown' ? profile.label : trip.destination)
   const fx = trip.homeCurrency && localCurrency && trip.homeCurrency !== localCurrency
     ? buildFxLabel(trip.homeCurrency, localCurrency)
     : null

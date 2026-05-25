@@ -214,6 +214,10 @@ function ItemRow({
 
 function HotelCheckinCard({ booking, time, tripSlug }: { booking: Booking; time: ParsedTime | null; tripSlug: string }) {
   const meta = safeJson<Record<string, string>>(booking.metadata) ?? {}
+  // Always derive nights from the actual span — meta.nights from Claude can be wrong
+  const nights = booking.endAt
+    ? Math.max(1, differenceInDays(startOfDay(booking.endAt), startOfDay(booking.startAt)))
+    : 1
   return (
     <div className="border border-line rounded-xl bg-paper-pure overflow-hidden">
       <div className="flex flex-col sm:flex-row">
@@ -226,7 +230,7 @@ function HotelCheckinCard({ booking, time, tripSlug }: { booking: Booking; time:
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
-                Hotel · {meta.nights ?? '?'} {Number(meta.nights) === 1 ? 'night' : 'nights'}
+                Hotel · {nights} {nights === 1 ? 'night' : 'nights'}
               </div>
               <h3 className="font-display text-xl sm:text-2xl mt-1">{booking.title}</h3>
               {booking.address && <p className="text-xs sm:text-sm text-ink-muted mt-1">{booking.address}</p>}
@@ -349,31 +353,36 @@ function BookingRow({
   }
 
   return (
-    <div className="border border-line rounded-lg p-3 sm:p-4 bg-paper-pure flex items-center gap-3 sm:gap-4">
-      <div className="w-10 sm:w-12 text-center shrink-0">
-        <div className="num-mono text-xs text-ink-muted">{fmtTime(booking.startAt)}</div>
-      </div>
-      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-md ${imgForBooking(booking.type, booking.title)} shrink-0 grid place-items-center`}>
-        {iconForType(booking.type)}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-medium truncate text-sm sm:text-base">{booking.title}</div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          {booking.notes && <div className="text-xs text-ink-muted truncate">{booking.notes}</div>}
-          {spanLabel && <span className="pill pill-info text-[9px]">{spanLabel}</span>}
-          {cancelPill && (
-            <span className={`pill text-[9px] ${cancelPill.tone === 'warning' ? 'pill-upcoming' : 'pill-overdue'}`}>
-              <AlertTriangle className="w-3 h-3" /> {cancelPill.text}
-            </span>
+    <div className="border border-line rounded-lg p-3 sm:p-4 bg-paper-pure flex items-center gap-3 sm:gap-4 hover:border-sage transition">
+      <Link
+        href={`/trips/${tripSlug}/booking/${booking.id}`}
+        className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0"
+      >
+        <div className="w-10 sm:w-12 text-center shrink-0">
+          <div className="num-mono text-xs text-ink-muted">{fmtTime(booking.startAt)}</div>
+        </div>
+        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-md ${imgForBooking(booking.type, booking.title)} shrink-0 grid place-items-center`}>
+          {iconForType(booking.type)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium truncate text-sm sm:text-base">{booking.title}</div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            {booking.notes && <div className="text-xs text-ink-muted truncate">{booking.notes}</div>}
+            {spanLabel && <span className="pill pill-info text-[9px]">{spanLabel}</span>}
+            {cancelPill && (
+              <span className={`pill text-[9px] ${cancelPill.tone === 'warning' ? 'pill-upcoming' : 'pill-overdue'}`}>
+                <AlertTriangle className="w-3 h-3" /> {cancelPill.text}
+              </span>
+            )}
+          </div>
+          {booking.confirmationCode && (
+            <div className="text-xs num-mono text-ink-muted mt-0.5 truncate">
+              {booking.confirmationCode}
+              {booking.cost ? ` · ${fmtMoneyFull(booking.cost, booking.currency ?? homeCurrency)}` : ''}
+            </div>
           )}
         </div>
-        {booking.confirmationCode && (
-          <div className="text-xs num-mono text-ink-muted mt-0.5 truncate">
-            {booking.confirmationCode}
-            {booking.cost ? ` · ${fmtMoneyFull(booking.cost, booking.currency ?? homeCurrency)}` : ''}
-          </div>
-        )}
-      </div>
+      </Link>
       {booking.paid ? (
         <span className="pill pill-paid shrink-0"><Check className="w-3 h-3" /> Paid</span>
       ) : booking.paymentMethod === 'Pay at venue' ? (

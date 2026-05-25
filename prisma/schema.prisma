@@ -90,6 +90,9 @@ model Trip {
   childCount    Int      @default(0)
   childrenAges  String?  // comma-separated ages, e.g. "8, 11"
 
+  // AI-generated local info for the destination (tipping, power, phrases, etc.)
+  localInfoJson String?  // JSON blob — see lib/local-info.ts for shape
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
