@@ -1,5 +1,6 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Mail, Copy, Inbox as InboxIcon } from 'lucide-react'
+import { Mail, Copy, Inbox as InboxIcon, ChevronRight } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { PasteEmailFormClient } from '@/components/PasteEmailFormClient'
 import { InlineDeleteButton } from '@/components/InlineDeleteButton'
@@ -93,35 +94,31 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
             </div>
           ) : (
             <>
-            {/* Mobile: card list (delete button always visible) */}
+            {/* Mobile: compact one-line rows, tap subject to open detail */}
             <div className="lg:hidden">
-              {emails.map((e, i) => (
-                <div
-                  key={e.id}
-                  className={`block px-5 py-4 ${i < emails.length - 1 ? 'border-b border-line' : ''}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs num-mono text-ink-muted">{fmtDate(e.receivedAt, 'MMM d, HH:mm')}</div>
-                      <div className="font-medium text-sm mt-1 break-words">{e.subject}</div>
-                      <div className="text-xs text-ink-muted truncate mt-0.5">{e.fromAddress}</div>
-                      {e.parsedSummary && (
-                        <div className="text-xs text-ink-muted italic mt-2 line-clamp-3">{e.parsedSummary}</div>
-                      )}
-                      <div className="mt-2">
-                        {e.errorMsg ? (
-                          <span className="pill pill-overdue">Error</span>
-                        ) : e.processed ? (
-                          <span className="pill pill-paid">Parsed</span>
-                        ) : (
-                          <span className="pill pill-upcoming">Pending</span>
-                        )}
-                      </div>
+              {emails.map((e, i) => {
+                const statusColor = e.errorMsg ? 'bg-rust' : e.processed ? 'bg-sage' : 'bg-gold'
+                const statusLabel = e.errorMsg ? 'Error' : e.processed ? 'Parsed' : 'Pending'
+                return (
+                  <div
+                    key={e.id}
+                    className={`flex items-center gap-1 ${i < emails.length - 1 ? 'border-b border-line' : ''}`}
+                  >
+                    <Link
+                      href={`/trips/${trip.slug}/inbox/${e.id}`}
+                      className="flex items-center gap-3 flex-1 min-w-0 px-4 py-3 hover:bg-line-soft/40 transition"
+                    >
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor}`} title={statusLabel} />
+                      <span className="flex-1 min-w-0 text-sm truncate">{e.subject}</span>
+                      <span className="text-[10px] num-mono text-ink-muted shrink-0">{fmtDate(e.receivedAt, 'MMM d')}</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-ink-muted shrink-0" />
+                    </Link>
+                    <div className="pr-2">
+                      <InlineDeleteButton kind="email" id={e.id} tripSlug={trip.slug} label="Delete email" size="sm" />
                     </div>
-                    <InlineDeleteButton kind="email" id={e.id} tripSlug={trip.slug} label="Delete email" size="md" />
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             {/* Desktop: table */}
@@ -141,7 +138,15 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
                   <tr key={e.id} className="hover:bg-line-soft/40">
                     <td className="px-6 py-3 num-mono text-xs text-ink-muted">{fmtDate(e.receivedAt, 'MMM d, HH:mm')}</td>
                     <td className="px-6 py-3 text-ink-muted">{e.fromAddress}</td>
-                    <td className="px-6 py-3 font-medium">{e.subject}</td>
+                    <td className="px-6 py-3 font-medium">
+                      <Link
+                        href={`/trips/${trip.slug}/inbox/${e.id}`}
+                        className="ulink inline-flex items-center gap-1.5"
+                      >
+                        {e.subject}
+                        <ChevronRight className="w-3.5 h-3.5 text-ink-muted" />
+                      </Link>
+                    </td>
                     <td className="px-6 py-3 text-ink-muted italic">{e.parsedSummary ?? '—'}</td>
                     <td className="px-6 py-3 text-right pr-6">
                       <div className="inline-flex items-center gap-2">
