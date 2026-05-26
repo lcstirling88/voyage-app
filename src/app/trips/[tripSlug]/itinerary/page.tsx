@@ -258,17 +258,13 @@ function HotelCheckinCard({ booking, time, tripSlug }: { booking: Booking; time:
     : 1
   return (
     <div className="border border-line rounded-xl bg-paper-pure p-3 sm:p-4">
-      {/* Title block + status/delete — full card width */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2">
-            <BedDouble className="w-3 h-3" />
-            <span>Check in{time ? ` · ${time.display}` : ''}</span>
-            <span className="opacity-50">·</span>
-            <span>{nights} {nights === 1 ? 'night' : 'nights'}</span>
-          </div>
-          <h3 className="font-display text-lg sm:text-xl mt-1 leading-tight">{booking.title}</h3>
-          {booking.address && <p className="text-xs text-ink-muted mt-1">{booking.address}</p>}
+      {/* Header line: tag on left, pills/delete on right — only this row reserves space for the controls */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2 min-w-0">
+          <BedDouble className="w-3 h-3 shrink-0" />
+          <span className="truncate">
+            Check in{time ? ` · ${time.display}` : ''} · {nights} {nights === 1 ? 'night' : 'nights'}
+          </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {booking.paid ? (
@@ -279,6 +275,12 @@ function HotelCheckinCard({ booking, time, tripSlug }: { booking: Booking; time:
           <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
         </div>
       </div>
+
+      {/* Hotel name — runs full card width */}
+      <h3 className="font-display text-lg sm:text-xl mt-1.5 leading-tight">{booking.title}</h3>
+
+      {/* Address — runs full card width */}
+      {booking.address && <p className="text-xs text-ink-muted mt-1">{booking.address}</p>}
 
       {/* Detail row — full card width, check-out lives on the check-out card */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-3 text-xs">
