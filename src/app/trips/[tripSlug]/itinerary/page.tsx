@@ -1,6 +1,11 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Check, Clock, Utensils, Plane, Train, Car, BedDouble, LogOut, Plus, AlertTriangle } from 'lucide-react'
+import {
+  Check, Clock, Utensils, Plane, Train, Car, BedDouble, LogOut, Plus, AlertTriangle,
+  Mountain, Telescope, Footprints, Sailboat, Wine, Bike, Camera, Landmark,
+  Fish, Flag, Sparkles, Coffee, Music, Waves, Tent, TreePine, Heart,
+  type LucideIcon,
+} from 'lucide-react'
 import { format, startOfDay, eachDayOfInterval, differenceInDays } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
@@ -14,35 +19,49 @@ import {
 } from '@/lib/itinerary'
 import type { Booking } from '@prisma/client'
 
-function imgForBooking(type: string, title: string) {
-  if (type === 'hotel') {
-    const t = title.toLowerCase()
-    if (t.includes('hoshinoya') || t.includes('ryokan')) return 'img-kyoto-ryokan'
-    if (t.includes('hakone') || t.includes('gora'))     return 'img-hakone'
-    if (t.includes('niwa') || t.includes('ginza'))      return 'img-ginza'
-    return 'img-tokyo-hotel'
-  }
-  if (type === 'restaurant') return 'img-restaurant'
-  if (type === 'flight')     return 'img-flight'
-  if (type === 'transit')    return 'img-transit'
-  if (type === 'car')        return 'img-transit'
+/**
+ * Pick a contextual lucide icon for the small uppercase header line of an
+ * activity card. Type wins for the obvious cases (hotel, flight, etc.);
+ * for generic 'activity' bookings we sniff the title for keywords so that
+ * a ski lesson gets a Mountain, stargazing gets a Telescope, etc.
+ */
+function iconForBooking(type: string, title: string): LucideIcon {
+  if (type === 'hotel')      return BedDouble
+  if (type === 'restaurant') return Utensils
+  if (type === 'flight')     return Plane
+  if (type === 'transit')    return Train
+  if (type === 'car')        return Car
+
   const t = title.toLowerCase()
-  if (t.includes('tsukiji'))    return 'img-tsukiji'
-  if (t.includes('teamlab'))    return 'img-teamlab'
-  if (t.includes('shibuya'))    return 'img-shibuya'
-  if (t.includes('meiji'))      return 'img-meiji'
-  if (t.includes('fushimi'))    return 'img-fushimi'
-  if (t.includes('arashiyama') || t.includes('bamboo')) return 'img-arashiyama'
-  if (t.includes('nara'))       return 'img-nara'
-  return 'img-activity'
+  if (/\b(ski|skiing|snowboard|snowboarding|snow|cardrona|skiwees|coronet|treble cone|remarkables|nzski)\b/.test(t)) return Mountain
+  if (/\b(stargaz|star gaz|astronomy|dark sky|observat|planetarium|nebula)\b/.test(t)) return Telescope
+  if (/\b(hike|hiking|trail|trek|track|walk)\b/.test(t)) return Footprints
+  if (/\b(cruise|boat|ferry|sail|kayak|jet ?boat|paddle)\b/.test(t)) return Sailboat
+  if (/\b(wine|vineyard|winer|cellar door|tasting)\b/.test(t)) return Wine
+  if (/\b(bike|cycling|cycle|mountain bike|e-?bike)\b/.test(t)) return Bike
+  if (/\b(museum|gallery|exhibit|heritage|historic|cathedral)\b/.test(t)) return Landmark
+  if (/\b(fish|angling)\b/.test(t)) return Fish
+  if (/\b(golf|tee time)\b/.test(t)) return Flag
+  if (/\b(coffee|cafe|café|brew)\b/.test(t)) return Coffee
+  if (/\b(concert|gig|music|orchestra|opera|theatre|theater)\b/.test(t)) return Music
+  if (/\b(beach|surf|swim|snorkel|dive|lagoon)\b/.test(t)) return Waves
+  if (/\b(camp|glamping|hut)\b/.test(t)) return Tent
+  if (/\b(park|forest|garden|botanic|nature|reserve|conservation)\b/.test(t)) return TreePine
+  if (/\b(photo|scenic|lookout|viewpoint|tour|sightsee)\b/.test(t)) return Camera
+  if (/\b(spa|massage|hot pool|onsen|wellness|thermal)\b/.test(t)) return Heart
+
+  return Sparkles
 }
 
-function iconForType(type: string) {
-  if (type === 'restaurant') return <Utensils className="w-4 h-4 text-paper-pure" />
-  if (type === 'flight')     return <Plane className="w-4 h-4 text-paper-pure" />
-  if (type === 'transit')    return <Train className="w-4 h-4 text-paper-pure" />
-  if (type === 'car')        return <Car className="w-4 h-4 text-paper-pure" />
-  return null
+/** Human-friendly uppercase label for the header line ("ACTIVITY", "RESTAURANT", …). */
+function typeLabelFor(type: string): string {
+  if (type === 'activity')   return 'Activity'
+  if (type === 'restaurant') return 'Restaurant'
+  if (type === 'flight')     return 'Flight'
+  if (type === 'transit')    return 'Transit'
+  if (type === 'car')        return 'Car'
+  if (type === 'hotel')      return 'Hotel'
+  return type.charAt(0).toUpperCase() + type.slice(1)
 }
 
 export default async function ItineraryPage({ params }: { params: Promise<{ tripSlug: string }> }) {
@@ -348,21 +367,26 @@ function CarRow({
   const verb = kind === 'pickup' ? 'Pick up' : 'Return'
   const location = kind === 'pickup' ? booking.location : (meta.dropoffLocation ?? booking.location)
   return (
-    <div className="border border-line rounded-lg bg-paper-pure px-4 py-3 flex items-start sm:items-center gap-3 text-sm">
-      <div className="w-10 sm:w-12 text-center shrink-0">
-        <div className="num-mono text-xs text-ink-muted">{time.display}</div>
+    <div className="border border-line rounded-xl bg-paper-pure p-3 sm:p-4">
+      {/* Header line: car icon + verb + time on left, delete on right */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2 min-w-0">
+          <Car className="w-3 h-3 shrink-0" />
+          <span className="truncate">{verb} · {time.display}</span>
+        </div>
+        <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
       </div>
-      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-md ${imgForBooking('car', booking.title)} shrink-0 grid place-items-center`}>
-        <Car className="w-4 h-4 text-paper-pure" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm sm:text-base truncate">{verb} · {booking.title}</div>
-        {location && <div className="text-xs text-ink-muted truncate">{location}</div>}
-        {booking.confirmationCode && (
-          <div className="text-xs num-mono text-ink-muted mt-0.5 truncate">{booking.confirmationCode}</div>
-        )}
-      </div>
-      <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
+
+      {/* Title — full card width */}
+      <h3 className="font-medium text-sm sm:text-base mt-1.5 leading-tight">{booking.title}</h3>
+
+      {/* Location — full card width */}
+      {location && <p className="text-xs text-ink-muted mt-1">{location}</p>}
+
+      {/* Confirmation */}
+      {booking.confirmationCode && (
+        <div className="text-xs num-mono text-ink-muted mt-2">{booking.confirmationCode}</div>
+      )}
     </div>
   )
 }
@@ -401,22 +425,36 @@ function BookingRow({
     }
   }
 
+  const Icon = iconForBooking(booking.type, booking.title)
+  const typeLabel = typeLabelFor(booking.type)
+  const timeLabel = fmtTime(booking.startAt)
+
   return (
-    <div className="border border-line rounded-lg p-3 sm:p-4 bg-paper-pure flex items-center gap-3 sm:gap-4 hover:border-sage transition">
-      <Link
-        href={`/trips/${tripSlug}/booking/${booking.id}`}
-        className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0"
-      >
-        <div className="w-10 sm:w-12 text-center shrink-0">
-          <div className="num-mono text-xs text-ink-muted">{fmtTime(booking.startAt)}</div>
+    <div className="border border-line rounded-xl bg-paper-pure p-3 sm:p-4 hover:border-sage transition">
+      {/* Header line: contextual icon + type · time on left, status pill + delete on right */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2 min-w-0">
+          <Icon className="w-3 h-3 shrink-0" />
+          <span className="truncate">{typeLabel}{timeLabel ? ` · ${timeLabel}` : ''}</span>
         </div>
-        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-md ${imgForBooking(booking.type, booking.title)} shrink-0 grid place-items-center`}>
-          {iconForType(booking.type)}
+        <div className="flex items-center gap-2 shrink-0">
+          {booking.paid ? (
+            <span className="pill pill-paid"><Check className="w-3 h-3" /> Paid</span>
+          ) : booking.paymentMethod === 'Pay at venue' ? (
+            <span className="pill pill-upcoming"><Clock className="w-3 h-3" /> At venue</span>
+          ) : booking.cost ? (
+            <span className="pill pill-upcoming"><Clock className="w-3 h-3" /> Pending</span>
+          ) : null}
+          <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="font-medium truncate text-sm sm:text-base">{booking.title}</div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            {booking.notes && <div className="text-xs text-ink-muted truncate">{booking.notes}</div>}
+      </div>
+
+      {/* Title + linked detail body — runs full card width */}
+      <Link href={`/trips/${tripSlug}/booking/${booking.id}`} className="block">
+        <h3 className="font-medium text-sm sm:text-base mt-1.5 leading-tight">{booking.title}</h3>
+        {booking.notes && <p className="text-xs text-ink-muted mt-1 line-clamp-2">{booking.notes}</p>}
+        {(spanLabel || cancelPill) && (
+          <div className="flex flex-wrap items-center gap-2 mt-2">
             {spanLabel && <span className="pill pill-info text-[9px]">{spanLabel}</span>}
             {cancelPill && (
               <span className={`pill text-[9px] ${cancelPill.tone === 'warning' ? 'pill-upcoming' : 'pill-overdue'}`}>
@@ -424,22 +462,15 @@ function BookingRow({
               </span>
             )}
           </div>
-          {booking.confirmationCode && (
-            <div className="text-xs num-mono text-ink-muted mt-0.5 truncate">
-              {booking.confirmationCode}
-              {booking.cost ? ` · ${fmtMoneyFull(booking.cost, booking.currency ?? homeCurrency)}` : ''}
-            </div>
-          )}
-        </div>
+        )}
+        {(booking.confirmationCode || booking.cost) && (
+          <div className="text-xs text-ink-muted mt-2 flex flex-wrap items-center gap-x-2">
+            {booking.confirmationCode && <span className="num-mono">{booking.confirmationCode}</span>}
+            {booking.confirmationCode && booking.cost && <span className="opacity-50">·</span>}
+            {booking.cost && <span>{fmtMoneyFull(booking.cost, booking.currency ?? homeCurrency)}</span>}
+          </div>
+        )}
       </Link>
-      {booking.paid ? (
-        <span className="pill pill-paid shrink-0"><Check className="w-3 h-3" /> Paid</span>
-      ) : booking.paymentMethod === 'Pay at venue' ? (
-        <span className="pill pill-upcoming shrink-0"><Clock className="w-3 h-3" /> At venue</span>
-      ) : booking.cost ? (
-        <span className="pill pill-upcoming shrink-0"><Clock className="w-3 h-3" /> Pending</span>
-      ) : null}
-      <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
     </div>
   )
 }
