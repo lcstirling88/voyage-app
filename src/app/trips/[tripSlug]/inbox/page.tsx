@@ -79,7 +79,7 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
           </div>
         </aside>
 
-        <section className="lg:col-span-3 border border-line rounded-xl bg-paper-pure overflow-hidden">
+        <section className="lg:col-span-3 border border-line rounded-xl bg-paper-pure lg:overflow-hidden">
           <div className="px-5 sm:px-6 py-4 border-b border-line flex flex-wrap items-center gap-3">
             <InboxIcon className="w-4 h-4 text-ink-muted" />
             <h2 className="font-display text-xl sm:text-2xl flex-1">Recent emails</h2>
@@ -94,16 +94,19 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
           ) : (
             <>
             {/* Mobile: card list (delete button always visible) */}
-            <div className="lg:hidden divide-y divide-line">
-              {emails.map((e) => (
-                <div key={e.id} className="px-5 py-4">
+            <div className="lg:hidden">
+              {emails.map((e, i) => (
+                <div
+                  key={e.id}
+                  className={`block px-5 py-4 ${i < emails.length - 1 ? 'border-b border-line' : ''}`}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="text-xs num-mono text-ink-muted">{fmtDate(e.receivedAt, 'MMM d, HH:mm')}</div>
-                      <div className="font-medium text-sm mt-1 truncate">{e.subject}</div>
+                      <div className="font-medium text-sm mt-1 break-words">{e.subject}</div>
                       <div className="text-xs text-ink-muted truncate mt-0.5">{e.fromAddress}</div>
                       {e.parsedSummary && (
-                        <div className="text-xs text-ink-muted italic mt-2 line-clamp-2">{e.parsedSummary}</div>
+                        <div className="text-xs text-ink-muted italic mt-2 line-clamp-3">{e.parsedSummary}</div>
                       )}
                       <div className="mt-2">
                         {e.errorMsg ? (
