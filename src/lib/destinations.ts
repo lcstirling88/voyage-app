@@ -7,6 +7,15 @@
  * Real-time FX should pull from an API; the table below is a fallback for the prototype.
  */
 
+export type DestinationHeroImage = {
+  /** Direct image URL (preferably hosted on a stable CDN like Unsplash). */
+  src: string
+  /** Alt text describing the iconic scene. */
+  alt: string
+  /** Photographer attribution, shown discreetly in the corner. */
+  credit?: string
+}
+
 export type DestinationProfile = {
   /** Matchers for the user's free-text destination input */
   matchers: RegExp[]
@@ -16,11 +25,21 @@ export type DestinationProfile = {
   currency: string
   /** Friendly label */
   label: string
+  /** Iconic hero image used at the top of the itinerary page. Optional —
+   *  destinations without a curated image fall back to a plain gradient. */
+  heroImage?: DestinationHeroImage
 }
 
+// Build an Unsplash CDN URL for a given photo id with sensible sizing/quality
+// for a large hero. Their CDN respects these params and returns an optimised JPEG.
+const unsplash = (id: string) =>
+  `https://images.unsplash.com/${id}?w=2400&q=80&auto=format&fit=crop`
+
 const PROFILES: DestinationProfile[] = [
-  { matchers: [/japan/i, /日本/], timezone: 'Asia/Tokyo', currency: 'JPY', label: 'Japan' },
-  { matchers: [/new\s*zealand/i, /\baotearoa\b/i, /\bnz\b/i], timezone: 'Pacific/Auckland', currency: 'NZD', label: 'New Zealand' },
+  { matchers: [/japan/i, /日本/], timezone: 'Asia/Tokyo', currency: 'JPY', label: 'Japan',
+    heroImage: { src: unsplash('photo-1493976040374-85c8e12f0c0e'), alt: 'Mount Fuji at dawn with cherry blossoms', credit: 'Unsplash' } },
+  { matchers: [/new\s*zealand/i, /\baotearoa\b/i, /\bnz\b/i], timezone: 'Pacific/Auckland', currency: 'NZD', label: 'New Zealand',
+    heroImage: { src: unsplash('photo-1469521669194-babb45599def'), alt: 'Lake Wakatipu and the Remarkables, Queenstown', credit: 'Unsplash' } },
   { matchers: [/australia/i, /\bau\b/i], timezone: 'Australia/Sydney', currency: 'AUD', label: 'Australia' },
   { matchers: [/italy/i, /italia/i], timezone: 'Europe/Rome', currency: 'EUR', label: 'Italy' },
   { matchers: [/iceland/i, /ísland/i], timezone: 'Atlantic/Reykjavik', currency: 'ISK', label: 'Iceland' },
@@ -53,7 +72,7 @@ export function profileForDestination(destination: string | null | undefined): O
   if (!destination) return FALLBACK
   for (const p of PROFILES) {
     if (p.matchers.some((r) => r.test(destination))) {
-      return { timezone: p.timezone, currency: p.currency, label: p.label }
+      return { timezone: p.timezone, currency: p.currency, label: p.label, heroImage: p.heroImage }
     }
   }
   return FALLBACK

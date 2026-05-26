@@ -17,6 +17,7 @@ import {
   cleanHotelName, cityForBooking,
   type DayPlan, type Session, type SessionItem, type ParsedTime, type PaletteSpec,
 } from '@/lib/itinerary'
+import { profileForDestination } from '@/lib/destinations'
 import type { Booking } from '@prisma/client'
 
 /**
@@ -79,16 +80,57 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
   const hotelOrder = hotelOrderForTrip(trip.bookings)
   const palette = getPalette(trip.colorPalette)
 
+  // Iconic destination photo + country label for the hero. Falls back to the
+  // existing gradient header for destinations we don't have a curated image for.
+  const destProfile = profileForDestination(trip.destination)
+  const heroImage = destProfile.heroImage
+
   return (
     <>
-      <div className="hero-light border-b border-line px-6 sm:px-10 py-8 sm:py-10">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">The plan</div>
-        <h1 className="h-display text-4xl sm:text-6xl mt-2">Day by day</h1>
-        <p className="text-ink-muted mt-3 max-w-xl text-sm sm:text-base">
-          Three sessions a day. Tap the <span className="num-mono">+</span> next to any day to add manually or ask the AI.
-          Forward booking emails to fill more in automatically.
-        </p>
-      </div>
+      {heroImage ? (
+        <div className="relative h-[55vh] min-h-[340px] sm:h-[60vh] sm:min-h-[440px] lg:min-h-[520px] bg-ink overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element -- external CDN image, next/image needs domain config */}
+          <img
+            src={heroImage.src}
+            alt={heroImage.alt}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          {/* Dark gradient at the bottom so the title stays legible regardless of photo */}
+          <div className="absolute inset-0 bg-gradient-to-b from-ink/10 via-transparent to-ink/70" />
+
+          {/* Top-left country chip */}
+          <div className="absolute top-4 left-4 sm:top-6 sm:left-8">
+            <span className="inline-flex items-center gap-2 text-paper-pure text-[10px] sm:text-[11px] uppercase tracking-[0.24em] bg-ink/40 backdrop-blur-md px-3 py-1.5 rounded-md">
+              {destProfile.label}
+            </span>
+          </div>
+
+          {/* Bottom-left title block */}
+          <div className="absolute bottom-6 left-6 sm:bottom-10 sm:left-10 right-6 max-w-2xl text-paper-pure">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-paper-pure/80">The plan</div>
+            <h1 className="h-display text-4xl sm:text-6xl mt-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]">Day by day</h1>
+            <p className="text-paper-pure/85 mt-3 max-w-xl text-sm sm:text-base drop-shadow">
+              Three sessions a day. Tap the <span className="num-mono">+</span> next to any day to add manually or ask the AI.
+            </p>
+          </div>
+
+          {/* Discreet photo credit, bottom-right */}
+          {heroImage.credit && (
+            <div className="absolute bottom-3 right-3 text-paper-pure/50 text-[9px] uppercase tracking-[0.2em]">
+              Photo · {heroImage.credit}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="hero-light border-b border-line px-6 sm:px-10 py-8 sm:py-10">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">The plan{destProfile.label && destProfile.label !== 'Unknown' ? ` · ${destProfile.label}` : ''}</div>
+          <h1 className="h-display text-4xl sm:text-6xl mt-2">Day by day</h1>
+          <p className="text-ink-muted mt-3 max-w-xl text-sm sm:text-base">
+            Three sessions a day. Tap the <span className="num-mono">+</span> next to any day to add manually or ask the AI.
+            Forward booking emails to fill more in automatically.
+          </p>
+        </div>
+      )}
 
       <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-5xl space-y-10 sm:space-y-12">
         {days.map((day, idx) => {
