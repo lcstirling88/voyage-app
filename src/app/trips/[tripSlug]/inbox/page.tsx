@@ -3,6 +3,7 @@ import { Mail, Copy, Inbox as InboxIcon } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { PasteEmailFormClient } from '@/components/PasteEmailFormClient'
 import { InlineDeleteButton } from '@/components/InlineDeleteButton'
+import { ClearAllEmailsClient } from '@/components/ClearAllEmailsClient'
 import { fmtDate } from '@/lib/format'
 
 const inboxDomain = process.env.NEXT_PUBLIC_INBOX_DOMAIN ?? 'voyage.local'
@@ -79,10 +80,11 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
         </aside>
 
         <section className="lg:col-span-3 border border-line rounded-xl bg-paper-pure overflow-hidden">
-          <div className="px-5 sm:px-6 py-4 border-b border-line flex items-center gap-3">
+          <div className="px-5 sm:px-6 py-4 border-b border-line flex flex-wrap items-center gap-3">
             <InboxIcon className="w-4 h-4 text-ink-muted" />
             <h2 className="font-display text-xl sm:text-2xl flex-1">Recent emails</h2>
             <span className="text-xs text-ink-muted">{emails.length} total</span>
+            <ClearAllEmailsClient tripSlug={trip.slug} emailCount={emails.length} />
           </div>
           {emails.length === 0 ? (
             <div className="px-6 py-16 text-center text-ink-muted">

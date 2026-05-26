@@ -611,9 +611,14 @@ export async function deleteIncomingEmail(formData: FormData) {
   if (email.trip) await requireTripAccess(email.trip.slug)
   else await requireUser()  // unrouted emails — any signed-in user can clean up
 
-  // Detach related bookings/documents (don't delete them — they may already be in use)
-  await prisma.booking.updateMany({ where: { sourceEmailId: id }, data: { sourceEmailId: null } })
-  await prisma.document.updateMany({ where: { sourceEmailId: id }, data: { sourceEmailId: null } })
+  // Cascade: also remove any Booking and Document that were created from this email.
+  // (Payments don't carry sourceEmailId yet, so they survive — they're more
+  // calendar-style entries that often duplicate across confirmation + receipt.)
+  // If the user manually edited a booking and wants to keep it after deleting the
+  // source email, they should delete the email FIRST, then re-add the booking
+  // manually — or simply edit the booking to detach it before deleting the email.
+  await prisma.booking.deleteMany({ where: { sourceEmailId: id } })
+  await prisma.document.deleteMany({ where: { sourceEmailId: id } })
   await prisma.incomingEmail.delete({ where: { id } })
 
   if (tripSlug) {
@@ -621,6 +626,43 @@ export async function deleteIncomingEmail(formData: FormData) {
     revalidatePath(`/trips/${tripSlug}`, 'layout')
   } else if (email.trip) {
     revalidatePath(`/trips/${email.trip.slug}/inbox`)
+    revalidatePath(`/trips/${email.trip.slug}`, 'layout')
+  }
+}
+
+/**
+ * Bulk reset: wipe every IncomingEmail + their cascaded Booking/Document for
+ * this trip. Manually-added bookings (without a sourceEmailId) survive.
+ * Payments are left as-is since they're not directly linked to emails.
+ */
+export type ClearAllEmailsResult =
+  | { ok: true; deletedEmails: number; deletedBookings: number; deletedDocuments: number }
+  | { ok: false; error: string }
+
+export async function clearAllEmails(formData: FormData): Promise<ClearAllEmailsResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!tripSlug) return { ok: false, error: 'Missing trip.' }
+  const { trip } = await requireTripAccess(tripSlug)
+
+  // Delete all bookings + documents that came from any email on this trip
+  const emails = await prisma.incomingEmail.findMany({
+    where: { tripId: trip.id },
+    select: { id: true },
+  })
+  const emailIds = emails.map((e) => e.id)
+  if (emailIds.length === 0) return { ok: true, deletedEmails: 0, deletedBookings: 0, deletedDocuments: 0 }
+
+  const deletedBookings = await prisma.booking.deleteMany({ where: { sourceEmailId: { in: emailIds } } })
+  const deletedDocuments = await prisma.document.deleteMany({ where: { sourceEmailId: { in: emailIds } } })
+  const deletedEmails = await prisma.incomingEmail.deleteMany({ where: { tripId: trip.id } })
+
+  revalidatePath(`/trips/${tripSlug}/inbox`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+  return {
+    ok: true,
+    deletedEmails: deletedEmails.count,
+    deletedBookings: deletedBookings.count,
+    deletedDocuments: deletedDocuments.count,
   }
 }
 
