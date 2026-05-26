@@ -599,13 +599,29 @@ export async function ingestPastedEmail(formData: FormData) {
 
 export async function deleteIncomingEmail(formData: FormData) {
   const id = String(formData.get('id') ?? '')
+  const tripSlug = String(formData.get('tripSlug') ?? '')
   if (!id) return
-  const email = await prisma.incomingEmail.findUnique({ where: { id } })
+
+  const email = await prisma.incomingEmail.findUnique({
+    where: { id },
+    include: { trip: true },
+  })
   if (!email) return
+  // Auth check — must have access to the trip the email belongs to
+  if (email.trip) await requireTripAccess(email.trip.slug)
+  else await requireUser()  // unrouted emails — any signed-in user can clean up
+
+  // Detach related bookings/documents (don't delete them — they may already be in use)
   await prisma.booking.updateMany({ where: { sourceEmailId: id }, data: { sourceEmailId: null } })
   await prisma.document.updateMany({ where: { sourceEmailId: id }, data: { sourceEmailId: null } })
   await prisma.incomingEmail.delete({ where: { id } })
-  if (email.tripId) revalidatePath(`/trips/[tripSlug]/inbox`, 'page')
+
+  if (tripSlug) {
+    revalidatePath(`/trips/${tripSlug}/inbox`)
+    revalidatePath(`/trips/${tripSlug}`, 'layout')
+  } else if (email.trip) {
+    revalidatePath(`/trips/${email.trip.slug}/inbox`)
+  }
 }
 
 // ----- Trip editing -----------------------------------------------------------------

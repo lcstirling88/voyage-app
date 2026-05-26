@@ -2,9 +2,14 @@
 
 import { useState, useTransition, useRef, useEffect } from 'react'
 import { Trash2 } from 'lucide-react'
-import { deleteBooking, deleteDocument, deletePayment } from '@/lib/actions'
+import { deleteBooking, deleteDocument, deletePayment, deleteIncomingEmail } from '@/lib/actions'
 
-const actions = { booking: deleteBooking, document: deleteDocument, payment: deletePayment }
+const actions = {
+  booking: deleteBooking,
+  document: deleteDocument,
+  payment: deletePayment,
+  email: deleteIncomingEmail,
+}
 
 export function InlineDeleteButton({
   kind,
@@ -13,7 +18,7 @@ export function InlineDeleteButton({
   label,
   size = 'sm',
 }: {
-  kind: 'booking' | 'document' | 'payment'
+  kind: 'booking' | 'document' | 'payment' | 'email'
   id: string
   tripSlug: string
   label?: string

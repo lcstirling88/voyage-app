@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { Mail, Copy, Inbox as InboxIcon } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { PasteEmailFormClient } from '@/components/PasteEmailFormClient'
+import { InlineDeleteButton } from '@/components/InlineDeleteButton'
 import { fmtDate } from '@/lib/format'
 
 const inboxDomain = process.env.NEXT_PUBLIC_INBOX_DOMAIN ?? 'voyage.local'
@@ -97,7 +98,8 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
                   <th className="text-left px-6 py-3 font-medium">From</th>
                   <th className="text-left px-6 py-3 font-medium">Subject</th>
                   <th className="text-left px-6 py-3 font-medium">Parser summary</th>
-                  <th className="text-right px-6 py-3 font-medium pr-6">Status</th>
+                  <th className="text-right px-6 py-3 font-medium">Status</th>
+                  <th className="text-right px-6 py-3 font-medium pr-6"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -107,7 +109,7 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
                     <td className="px-6 py-3 text-ink-muted">{e.fromAddress}</td>
                     <td className="px-6 py-3 font-medium">{e.subject}</td>
                     <td className="px-6 py-3 text-ink-muted italic">{e.parsedSummary ?? '—'}</td>
-                    <td className="px-6 py-3 text-right pr-6">
+                    <td className="px-6 py-3 text-right">
                       {e.errorMsg ? (
                         <span className="pill pill-overdue">Error</span>
                       ) : e.processed ? (
@@ -115,6 +117,9 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
                       ) : (
                         <span className="pill pill-upcoming">Pending</span>
                       )}
+                    </td>
+                    <td className="px-6 py-3 text-right pr-6">
+                      <InlineDeleteButton kind="email" id={e.id} tripSlug={trip.slug} label="Delete email" />
                     </td>
                   </tr>
                 ))}
