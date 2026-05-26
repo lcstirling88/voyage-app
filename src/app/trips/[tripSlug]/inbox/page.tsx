@@ -90,7 +90,37 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
               <div className="text-sm">No emails yet. Paste a sample above to see the parser in action.</div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile: card list (delete button always visible) */}
+            <div className="lg:hidden divide-y divide-line">
+              {emails.map((e) => (
+                <div key={e.id} className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs num-mono text-ink-muted">{fmtDate(e.receivedAt, 'MMM d, HH:mm')}</div>
+                      <div className="font-medium text-sm mt-1 truncate">{e.subject}</div>
+                      <div className="text-xs text-ink-muted truncate mt-0.5">{e.fromAddress}</div>
+                      {e.parsedSummary && (
+                        <div className="text-xs text-ink-muted italic mt-2 line-clamp-2">{e.parsedSummary}</div>
+                      )}
+                      <div className="mt-2">
+                        {e.errorMsg ? (
+                          <span className="pill pill-overdue">Error</span>
+                        ) : e.processed ? (
+                          <span className="pill pill-paid">Parsed</span>
+                        ) : (
+                          <span className="pill pill-upcoming">Pending</span>
+                        )}
+                      </div>
+                    </div>
+                    <InlineDeleteButton kind="email" id={e.id} tripSlug={trip.slug} label="Delete email" size="md" />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop: table */}
+            <div className="hidden lg:block overflow-x-auto">
             <table className="w-full text-sm min-w-[640px]">
               <thead className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
                 <tr className="border-b border-line">
@@ -98,8 +128,7 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
                   <th className="text-left px-6 py-3 font-medium">From</th>
                   <th className="text-left px-6 py-3 font-medium">Subject</th>
                   <th className="text-left px-6 py-3 font-medium">Parser summary</th>
-                  <th className="text-right px-6 py-3 font-medium">Status</th>
-                  <th className="text-right px-6 py-3 font-medium pr-6"></th>
+                  <th className="text-right px-6 py-3 font-medium pr-6">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -109,23 +138,24 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
                     <td className="px-6 py-3 text-ink-muted">{e.fromAddress}</td>
                     <td className="px-6 py-3 font-medium">{e.subject}</td>
                     <td className="px-6 py-3 text-ink-muted italic">{e.parsedSummary ?? '—'}</td>
-                    <td className="px-6 py-3 text-right">
-                      {e.errorMsg ? (
-                        <span className="pill pill-overdue">Error</span>
-                      ) : e.processed ? (
-                        <span className="pill pill-paid">Parsed</span>
-                      ) : (
-                        <span className="pill pill-upcoming">Pending</span>
-                      )}
-                    </td>
                     <td className="px-6 py-3 text-right pr-6">
-                      <InlineDeleteButton kind="email" id={e.id} tripSlug={trip.slug} label="Delete email" />
+                      <div className="inline-flex items-center gap-2">
+                        {e.errorMsg ? (
+                          <span className="pill pill-overdue">Error</span>
+                        ) : e.processed ? (
+                          <span className="pill pill-paid">Parsed</span>
+                        ) : (
+                          <span className="pill pill-upcoming">Pending</span>
+                        )}
+                        <InlineDeleteButton kind="email" id={e.id} tripSlug={trip.slug} label="Delete email" size="md" />
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             </div>
+            </>
           )}
         </section>
       </div>
