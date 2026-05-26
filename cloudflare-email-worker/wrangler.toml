@@ -1,0 +1,16 @@
+# Wrangler config for voyage-email-worker.
+#
+# Deploy from this directory with:
+#   npx wrangler deploy
+#
+# Env vars VOYAGE_WEBHOOK_URL and WEBHOOK_SECRET must be set on the Worker
+# already (Cloudflare dashboard → Settings → Variables). Wrangler does NOT
+# clear existing secrets/vars on deploy, so they survive across deploys.
+#
+# Email Routing binding is configured in the Cloudflare dashboard
+# (Email → Email Routing → Routes → catch-all → Send to a Worker → this one).
+# That binding is independent of code deploys.
+
+name = "voyage-email-worker"
+main = "src/worker.js"
+compatibility_date = "2025-11-01"

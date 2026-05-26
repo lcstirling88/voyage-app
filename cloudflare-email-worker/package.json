@@ -1,9 +1,13 @@
 {
   "name": "voyage-email-worker",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Cloudflare Email Worker that forwards inbound mail to Voyage's webhook",
-  "dependencies": {
-    "postal-mime": "^2.4.5"
+  "description": "Cloudflare Email Worker that forwards inbound mail to Voyage's webhook as base64 raw MIME. No npm deps — Vercel side does the MIME parsing.",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
   }
 }
