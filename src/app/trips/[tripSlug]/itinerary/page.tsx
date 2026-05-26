@@ -258,35 +258,29 @@ function HotelCheckinCard({ booking, time, tripSlug }: { booking: Booking; time:
     : 1
   return (
     <div className="border border-line rounded-xl bg-paper-pure p-3 sm:p-4">
-      {/* Top row: square image + title block + status/delete */}
-      <div className="flex items-start gap-3 sm:gap-4">
-        <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-lg ${imgForBooking(booking.type, booking.title)} shrink-0 relative overflow-hidden`}>
-          <div className="absolute inset-x-1 bottom-1 text-paper-pure text-[9px] uppercase tracking-[0.14em] bg-ink/50 backdrop-blur px-1.5 py-0.5 rounded text-center">
-            Check in{time ? ` · ${time.display}` : ''}
+      {/* Title block + status/delete — full card width */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2">
+            <BedDouble className="w-3 h-3" />
+            <span>Check in{time ? ` · ${time.display}` : ''}</span>
+            <span className="opacity-50">·</span>
+            <span>{nights} {nights === 1 ? 'night' : 'nights'}</span>
           </div>
+          <h3 className="font-display text-lg sm:text-xl mt-1 leading-tight">{booking.title}</h3>
+          {booking.address && <p className="text-xs text-ink-muted mt-1">{booking.address}</p>}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
-                Hotel · {nights} {nights === 1 ? 'night' : 'nights'}
-              </div>
-              <h3 className="font-display text-lg sm:text-xl mt-0.5 leading-tight">{booking.title}</h3>
-              {booking.address && <p className="text-xs text-ink-muted mt-1 line-clamp-2">{booking.address}</p>}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {booking.paid ? (
-                <span className="pill pill-paid"><Check className="w-3 h-3" /> Paid</span>
-              ) : (
-                <span className="pill pill-upcoming"><Clock className="w-3 h-3" /> Pending</span>
-              )}
-              <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
-            </div>
-          </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {booking.paid ? (
+            <span className="pill pill-paid"><Check className="w-3 h-3" /> Paid</span>
+          ) : (
+            <span className="pill pill-upcoming"><Clock className="w-3 h-3" /> Pending</span>
+          )}
+          <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
         </div>
       </div>
 
-      {/* Detail row — full card width, check-out moved off this card */}
+      {/* Detail row — full card width, check-out lives on the check-out card */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-3 text-xs">
         <div>
           <div className="text-ink-muted">Check-in</div>
