@@ -89,24 +89,48 @@ export async function POST(req: NextRequest) {
 
   // Parse + persist
   try {
-    const validAttachments = (payload.Attachments ?? [])
-      .filter((a) => a.Content && a.Content.length > 0)
-    const inputAttachments = validAttachments.map((a) => ({
+    // Two views of the attachments:
+    //  - allReported: every entry the worker handed us, even if Content came
+    //    through empty. We persist all of them so the user can see on the email
+    //    detail page that the worker DID notice an attachment (just with no
+    //    decodable content) — vs. the worker reporting nothing at all (which
+    //    would point at the email client).
+    //  - validForParsing: only entries with actual base64 content, since those
+    //    are the ones we can hand to Claude.
+    const allReported = payload.Attachments ?? []
+    const validForParsing = allReported.filter((a) => a.Content && a.Content.length > 0)
+
+    // Diagnostic log — visible in Vercel runtime logs. Helps us see whether the
+    // Cloudflare worker is sending attachment metadata but no content (postal-mime
+    // parse issue) vs. sending nothing at all (email client stripped them).
+    console.log('[email-inbound] received', {
+      from: payload.From,
+      to: payload.To,
+      subject: payload.Subject?.slice(0, 80),
+      bodyChars: (payload.TextBody?.length ?? 0) + (payload.HtmlBody?.length ?? 0),
+      attachmentsReported: allReported.length,
+      attachmentsWithContent: validForParsing.length,
+      attachmentSummary: allReported.map((a) => `${a.Name || '?'}|${a.ContentType || '?'}|${a.ContentLength ?? 0}B|content=${a.Content?.length ?? 0}chars`),
+    })
+
+    const inputAttachments = validForParsing.map((a) => ({
       filename: a.Name || 'attachment',
       mimeType: a.ContentType || 'application/octet-stream',
       contentBase64: a.Content,
     }))
 
-    // Record what attachments arrived alongside the email so the user can see
-    // on the email detail page whether their forward actually included them
-    // (mobile mail apps often silently strip attachments on Forward).
-    if (validAttachments.length > 0) {
+    // Persist ALL reported attachments (with or without content) so the UI can
+    // show them. A zero-byte attachment in the list = worker saw a header but
+    // couldn't decode the body.
+    if (allReported.length > 0) {
       await prisma.emailAttachment.createMany({
-        data: validAttachments.map((a) => ({
+        data: allReported.map((a) => ({
           emailId: incoming.id,
           filename: a.Name || 'attachment',
           mimeType: a.ContentType || 'application/octet-stream',
           storagePath: '', // content blob isn't persisted yet
+          // Prefer the worker-reported ContentLength (raw bytes); fall back to
+          // the base64 length × 0.75 if the worker didn't include it.
           size: a.ContentLength || Math.floor((a.Content?.length ?? 0) * 0.75),
         })),
       })
