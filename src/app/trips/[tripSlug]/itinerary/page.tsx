@@ -327,10 +327,12 @@ function HotelCheckoutRow({ booking, time, tripSlug }: { booking: Booking; time:
   const checkoutTime = time?.display || metaCheckout
   return (
     <div className="border border-line rounded-xl bg-paper-pure p-3 sm:p-4">
-      {/* Header line: LogOut icon + check out · time on left, delete on right */}
+      {/* Header line: LogOut icon + check out · time on left, delete on right —
+          icon inherits the muted heading colour so it reads as part of the label,
+          matching the BedDouble icon on the check-in card. */}
       <div className="flex items-center justify-between gap-3">
         <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2 min-w-0">
-          <LogOut className="w-3 h-3 shrink-0 text-rust" />
+          <LogOut className="w-3 h-3 shrink-0" />
           <span className="truncate">Check out{checkoutTime ? ` · ${checkoutTime}` : ''}</span>
         </div>
         <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
