@@ -89,19 +89,36 @@ export async function POST(req: NextRequest) {
 
   // Parse + persist
   try {
+    const validAttachments = (payload.Attachments ?? [])
+      .filter((a) => a.Content && a.Content.length > 0)
+    const inputAttachments = validAttachments.map((a) => ({
+      filename: a.Name || 'attachment',
+      mimeType: a.ContentType || 'application/octet-stream',
+      contentBase64: a.Content,
+    }))
+
+    // Record what attachments arrived alongside the email so the user can see
+    // on the email detail page whether their forward actually included them
+    // (mobile mail apps often silently strip attachments on Forward).
+    if (validAttachments.length > 0) {
+      await prisma.emailAttachment.createMany({
+        data: validAttachments.map((a) => ({
+          emailId: incoming.id,
+          filename: a.Name || 'attachment',
+          mimeType: a.ContentType || 'application/octet-stream',
+          storagePath: '', // content blob isn't persisted yet
+          size: a.ContentLength || Math.floor((a.Content?.length ?? 0) * 0.75),
+        })),
+      })
+    }
+
     const input: EmailInput = {
       from: payload.From,
       to: payload.To,
       subject: incoming.subject,
       text: incoming.textBody ?? '',
       html: incoming.htmlBody ?? undefined,
-      attachments: (payload.Attachments ?? [])
-        .filter((a) => a.Content && a.Content.length > 0)
-        .map((a) => ({
-          filename: a.Name || 'attachment',
-          mimeType: a.ContentType || 'application/octet-stream',
-          contentBase64: a.Content,
-        })),
+      attachments: inputAttachments,
     }
     const parsed = await parseEmail(input)
     const ingestSummary = await persistParserResult(trip, parsed, incoming.id)

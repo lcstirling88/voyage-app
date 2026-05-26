@@ -573,6 +573,18 @@ export async function ingestPastedEmail(formData: FormData) {
     },
   })
 
+  if (attachments.length > 0) {
+    await prisma.emailAttachment.createMany({
+      data: attachments.map((a) => ({
+        emailId: incoming.id,
+        filename: a.filename,
+        mimeType: a.mimeType,
+        storagePath: '',
+        size: Math.floor(a.contentBase64.length * 0.75),
+      })),
+    })
+  }
+
   let parsed: ParserResult
   try {
     parsed = await parseEmail({ from, to: incoming.toAddress, subject, text, attachments })
@@ -608,6 +620,99 @@ export async function ingestPastedEmail(formData: FormData) {
       payments: parsed.payments.length,
     },
     ingest: ingestSummary,
+  }
+}
+
+/**
+ * Re-parse an existing email with one or more extra attachments uploaded from
+ * the email detail page. The parser runs again over the stored body + the
+ * uploaded files, and the dedupe in persistParserResult updates the existing
+ * booking instead of creating a fresh one. Use case: the original forward
+ * stripped the e-ticket PDF, so the booking lost everything not on the body.
+ */
+type ReparseResult = {
+  success: boolean
+  error?: string
+  parserMode?: string
+  summary?: string
+  counts?: { bookings: number; documents: number; payments: number }
+}
+
+export async function reparseEmailWithFiles(formData: FormData): Promise<ReparseResult> {
+  const emailId = String(formData.get('emailId') ?? '')
+  if (!emailId) return { success: false, error: 'Missing email id.' }
+
+  const email = await prisma.incomingEmail.findUnique({
+    where: { id: emailId },
+    include: { trip: true },
+  })
+  if (!email || !email.trip) return { success: false, error: 'Email or trip not found.' }
+
+  const rawAttachments = formData.getAll('attachments').filter((v): v is File => v instanceof File && v.size > 0)
+  if (rawAttachments.length === 0) {
+    return { success: false, error: 'Add at least one file (PDF, image, .ics) before re-parsing.' }
+  }
+  const attachments = await Promise.all(
+    rawAttachments.map(async (f) => ({
+      filename: f.name,
+      mimeType: f.type || 'application/octet-stream',
+      contentBase64: Buffer.from(await f.arrayBuffer()).toString('base64'),
+    }))
+  )
+
+  // Record the freshly uploaded attachments alongside whatever was already attached
+  await prisma.emailAttachment.createMany({
+    data: attachments.map((a) => ({
+      emailId: email.id,
+      filename: a.filename,
+      mimeType: a.mimeType,
+      storagePath: '',
+      size: Math.floor(a.contentBase64.length * 0.75),
+    })),
+  })
+
+  let parsed: ParserResult
+  try {
+    parsed = await parseEmail({
+      from: email.fromAddress,
+      to: email.toAddress,
+      subject: email.subject,
+      text: email.textBody ?? '',
+      html: email.htmlBody ?? undefined,
+      attachments,
+    })
+  } catch (err) {
+    await prisma.incomingEmail.update({
+      where: { id: email.id },
+      data: { errorMsg: String(err), processed: true },
+    })
+    return { success: false, error: 'Parser failed: ' + String(err) }
+  }
+
+  await persistParserResult(email.trip, parsed, email.id)
+
+  await prisma.incomingEmail.update({
+    where: { id: email.id },
+    data: {
+      processed: true,
+      parsedSummary: parsed.summary,
+      parsedJson: JSON.stringify(parsed),
+      errorMsg: null,
+    },
+  })
+
+  revalidatePath(`/trips/${email.trip.slug}`, 'layout')
+  revalidatePath(`/trips/${email.trip.slug}/inbox/${email.id}`)
+
+  return {
+    success: true,
+    parserMode: parsed.mode,
+    summary: parsed.summary,
+    counts: {
+      bookings: parsed.bookings.length,
+      documents: parsed.documents.length,
+      payments: parsed.payments.length,
+    },
   }
 }
 

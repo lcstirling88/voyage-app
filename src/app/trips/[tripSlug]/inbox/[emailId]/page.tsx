@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ChevronLeft, Mail, AlertTriangle, Check, Clock } from 'lucide-react'
+import { ChevronLeft, Mail, AlertTriangle, Check, Clock, Paperclip, FileText } from 'lucide-react'
 import { format } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
 import { InlineDeleteButton } from '@/components/InlineDeleteButton'
+import { ReparseEmailFormClient } from '@/components/ReparseEmailFormClient'
 
 export default async function EmailDetailPage({
   params,
@@ -20,9 +21,16 @@ export default async function EmailDetailPage({
       trip: true,
       bookings: { select: { id: true, title: true, type: true, startAt: true } },
       documents: { select: { id: true, title: true, category: true } },
+      attachments: { select: { id: true, filename: true, mimeType: true, size: true } },
     },
   })
   if (!email || email.trip?.slug !== tripSlug) notFound()
+
+  // Heuristic: did the body mention an attachment? If so and none came through,
+  // surface a hint — most often the user's email client stripped it on Forward.
+  const bodyForCheck = (email.textBody ?? '').toLowerCase() + ' ' + (email.parsedSummary ?? '').toLowerCase()
+  const bodyMentionsAttachment = /\b(attached|attachment|see (the )?pdf|e-ticket|itinerary receipt)\b/.test(bodyForCheck)
+  const missingAttachments = email.attachments.length === 0 && bodyMentionsAttachment
 
   type ParsedShape = {
     summary?: string
@@ -124,6 +132,45 @@ export default async function EmailDetailPage({
           ) : (
             <div className="text-xs text-ink-muted italic">No body content stored.</div>
           )}
+        </section>
+
+        {/* Attachments received */}
+        <section className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2">
+              <Paperclip className="w-3 h-3" />
+              <span>Attachments received · {email.attachments.length}</span>
+            </div>
+          </div>
+          {email.attachments.length === 0 ? (
+            <div className={`text-xs ${missingAttachments ? 'text-wine' : 'text-ink-muted'} italic`}>
+              {missingAttachments ? (
+                <>
+                  ⚠ The email body refers to an attachment, but none came through. Your email client may have stripped it on Forward
+                  (iOS Mail, Gmail mobile, and some other apps do this silently — look for an &quot;Include attachments&quot; toggle).
+                  Upload the file below to re-parse without re-forwarding.
+                </>
+              ) : (
+                <>No attachments came with this email.</>
+              )}
+            </div>
+          ) : (
+            <ul className="space-y-1.5 text-sm">
+              {email.attachments.map((a) => (
+                <li key={a.id} className="flex items-center gap-3">
+                  <FileText className="w-3.5 h-3.5 text-ink-muted shrink-0" />
+                  <span className="flex-1 min-w-0 truncate">{a.filename}</span>
+                  <span className="text-[10px] num-mono text-ink-muted shrink-0">{a.mimeType}</span>
+                  <span className="text-[10px] num-mono text-ink-muted shrink-0">{(a.size / 1024).toFixed(0)}KB</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-4 pt-4 border-t border-line">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted mb-3">Re-parse with extra files</div>
+            <ReparseEmailFormClient emailId={email.id} />
+          </div>
         </section>
 
         {/* Parsed JSON */}
