@@ -326,15 +326,21 @@ function HotelCheckoutRow({ booking, time, tripSlug }: { booking: Booking; time:
   const metaCheckout = meta.checkOut ? formatTime(meta.checkOut, '') : ''
   const checkoutTime = time?.display || metaCheckout
   return (
-    <div className="border border-line rounded-lg bg-paper-pure px-4 py-2.5 flex items-center gap-3 text-sm">
-      <LogOut className="w-4 h-4 text-rust shrink-0" />
-      <div className="flex-1 min-w-0">
-        <span className="text-ink-muted">Check out</span>
-        {checkoutTime && <> <span className="num-mono">{checkoutTime}</span></>}
-        <span className="text-ink-muted"> from </span>
-        <span className="font-medium">{booking.title}</span>
+    <div className="border border-line rounded-xl bg-paper-pure p-3 sm:p-4">
+      {/* Header line: LogOut icon + check out · time on left, delete on right */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2 min-w-0">
+          <LogOut className="w-3 h-3 shrink-0 text-rust" />
+          <span className="truncate">Check out{checkoutTime ? ` · ${checkoutTime}` : ''}</span>
+        </div>
+        <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
       </div>
-      <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
+
+      {/* Hotel title — full card width */}
+      <h3 className="font-medium text-sm sm:text-base mt-1.5 leading-tight">{booking.title}</h3>
+
+      {/* Address — full card width */}
+      {booking.address && <p className="text-xs text-ink-muted mt-1">{booking.address}</p>}
     </div>
   )
 }
