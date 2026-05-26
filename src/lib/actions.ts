@@ -547,7 +547,21 @@ export async function ingestPastedEmail(formData: FormData) {
   const from = String(formData.get('from') ?? 'unknown@unknown')
   const subject = String(formData.get('subject') ?? '(no subject)')
   const text = String(formData.get('body') ?? '')
-  if (!text.trim()) return { error: 'Email body is empty' }
+
+  // Lift uploaded files off the FormData and convert each to base64 so they
+  // can ride through the parser → Claude pipeline alongside the email body.
+  const rawAttachments = formData.getAll('attachments').filter((v): v is File => v instanceof File && v.size > 0)
+  const attachments = await Promise.all(
+    rawAttachments.map(async (f) => ({
+      filename: f.name,
+      mimeType: f.type || 'application/octet-stream',
+      contentBase64: Buffer.from(await f.arrayBuffer()).toString('base64'),
+    }))
+  )
+
+  if (!text.trim() && attachments.length === 0) {
+    return { error: 'Add an email body or at least one attachment for the parser to read.' }
+  }
 
   const incoming = await prisma.incomingEmail.create({
     data: {
@@ -561,7 +575,7 @@ export async function ingestPastedEmail(formData: FormData) {
 
   let parsed: ParserResult
   try {
-    parsed = await parseEmail({ from, to: incoming.toAddress, subject, text })
+    parsed = await parseEmail({ from, to: incoming.toAddress, subject, text, attachments })
   } catch (err) {
     await prisma.incomingEmail.update({
       where: { id: incoming.id },

@@ -9,6 +9,26 @@
  */
 
 import { getAnthropic, PARSER_MODEL } from './anthropic'
+import type Anthropic from '@anthropic-ai/sdk'
+
+// Anthropic accepts up to ~32MB per request including base64 overhead. Cap each
+// individual attachment so a single huge PDF can't make the whole call fail,
+// and bail past a total budget so a multi-attachment forward stays under the limit.
+const MAX_BYTES_PER_ATTACHMENT = 20 * 1024 * 1024 // 20 MB decoded
+const MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024 // 25 MB decoded across all attachments
+const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
+const INLINE_TEXT_TYPES = new Set([
+  'text/plain', 'text/calendar', 'text/html', 'text/csv', 'application/json',
+])
+
+/** An attachment lifted off the inbound email and passed to the parser. */
+export type EmailAttachmentInput = {
+  filename: string
+  /** RFC 2046 MIME type, e.g. "application/pdf" or "image/jpeg". */
+  mimeType: string
+  /** Base64-encoded raw bytes of the file. */
+  contentBase64: string
+}
 
 export type ParsedBooking = {
   type: 'hotel' | 'flight' | 'activity' | 'restaurant' | 'transit' | 'car' | 'other'
@@ -128,6 +148,8 @@ export interface EmailInput {
   subject: string
   text: string
   html?: string
+  /** PDFs, images, and text-like attachments to send to Claude alongside the body. */
+  attachments?: EmailAttachmentInput[]
 }
 
 export async function parseEmail(email: EmailInput): Promise<ParserResult> {
@@ -146,7 +168,7 @@ export async function parseEmail(email: EmailInput): Promise<ParserResult> {
 async function parseWithClaude(email: EmailInput): Promise<ParserResult> {
   const anthropic = getAnthropic()!
 
-  const systemPrompt = `You extract structured travel bookings from emails. You will be given a single email (subject, from, body). Call the \`save_parsed_email\` tool exactly once with everything you can extract.
+  const systemPrompt = `You extract structured travel bookings from emails. You will be given a single email (subject, from, body) — plus any PDF, image, or text attachments that came with it. The email body is often just a cover note, with the real booking detail living in an attached confirmation PDF, ticket, or itinerary scan. READ THE ATTACHMENTS — they usually contain the dates, times, addresses, confirmation codes, and traveller names you need. If the body and an attachment disagree, prefer the attachment. Call the \`save_parsed_email\` tool exactly once with everything you can extract from the combined body + attachments.
 
 GUIDELINES:
 - One email can contain multiple bookings (e.g. a flight itinerary with outbound + return, or a hotel + airport transfer).
@@ -190,12 +212,70 @@ CANCELLATION POLICY:
 - Always set cancellationPolicy to a one-sentence summary (e.g. "Free cancellation up to 48 hours before check-in" or "Non-refundable").
 - Don't guess — leave these fields empty if the email doesn't mention cancellation terms.`
 
-  const userContent = `Subject: ${email.subject}
+  // Build a multimodal user message: attached PDFs and images go in first as
+  // their own content blocks (Anthropic recommends documents before text for
+  // best results), text-like attachments are inlined into the prompt, and the
+  // email body is always the final text block so Claude knows the question.
+  const docBlocks: Anthropic.Messages.ContentBlockParam[] = []
+  const inlineExtras: string[] = []
+  let usedBudget = 0
+
+  for (const a of email.attachments ?? []) {
+    const approxBytes = Math.floor(a.contentBase64.length * 0.75)
+    if (approxBytes > MAX_BYTES_PER_ATTACHMENT) {
+      inlineExtras.push(`(Skipped oversize attachment: ${a.filename}, ~${(approxBytes / 1024 / 1024).toFixed(1)}MB > 20MB limit.)`)
+      continue
+    }
+    if (usedBudget + approxBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
+      inlineExtras.push(`(Skipped attachment past budget: ${a.filename}, ~${(approxBytes / 1024 / 1024).toFixed(1)}MB; total cap is 25MB per email.)`)
+      continue
+    }
+    usedBudget += approxBytes
+
+    if (a.mimeType === 'application/pdf') {
+      docBlocks.push({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: a.contentBase64 },
+        title: a.filename,
+      } as Anthropic.Messages.ContentBlockParam)
+    } else if (SUPPORTED_IMAGE_TYPES.has(a.mimeType)) {
+      docBlocks.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: a.mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+          data: a.contentBase64,
+        },
+      })
+    } else if (INLINE_TEXT_TYPES.has(a.mimeType)) {
+      try {
+        const text = Buffer.from(a.contentBase64, 'base64').toString('utf-8')
+        // Strip HTML tags if it's text/html so Claude doesn't drown in markup
+        const cleaned = a.mimeType === 'text/html'
+          ? text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+          : text
+        inlineExtras.push(`--- ATTACHMENT: ${a.filename} (${a.mimeType}) ---\n${cleaned.slice(0, 30000)}`)
+      } catch {
+        inlineExtras.push(`(Attachment ${a.filename} could not be decoded.)`)
+      }
+    } else {
+      inlineExtras.push(`(Attachment present but not readable: ${a.filename}, ${a.mimeType}, ~${(approxBytes / 1024).toFixed(0)}KB.)`)
+    }
+  }
+
+  const userText = `Subject: ${email.subject}
 From: ${email.from}
 To: ${email.to}
 
 --- BODY ---
-${email.text || (email.html ? email.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '')}`
+${email.text || (email.html ? email.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '(no plain text body — see attachments)')}
+${inlineExtras.length ? `\n--- INLINE ATTACHMENTS ---\n${inlineExtras.join('\n\n')}` : ''}
+${docBlocks.length ? `\n(${docBlocks.length} document/image attachment${docBlocks.length === 1 ? '' : 's'} also attached above — read them too.)` : ''}`
+
+  const userContent: Anthropic.Messages.ContentBlockParam[] = [
+    ...docBlocks,
+    { type: 'text', text: userText },
+  ]
 
   const response = await anthropic.messages.create({
     model: PARSER_MODEL,

@@ -95,6 +95,13 @@ export async function POST(req: NextRequest) {
       subject: incoming.subject,
       text: incoming.textBody ?? '',
       html: incoming.htmlBody ?? undefined,
+      attachments: (payload.Attachments ?? [])
+        .filter((a) => a.Content && a.Content.length > 0)
+        .map((a) => ({
+          filename: a.Name || 'attachment',
+          mimeType: a.ContentType || 'application/octet-stream',
+          contentBase64: a.Content,
+        })),
     }
     const parsed = await parseEmail(input)
     const ingestSummary = await persistParserResult(trip, parsed, incoming.id)

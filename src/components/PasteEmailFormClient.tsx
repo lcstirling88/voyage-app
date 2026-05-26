@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Sparkles, Send } from 'lucide-react'
+import { Sparkles, Send, Paperclip, X } from 'lucide-react'
 import { ingestPastedEmail } from '@/lib/actions'
 
 const samples: { label: string; from: string; subject: string; body: string }[] = [
@@ -62,6 +62,7 @@ export function PasteEmailFormClient({ tripSlug }: { tripSlug: string }) {
   const [from, setFrom] = useState('')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
+  const [attachments, setAttachments] = useState<File[]>([])
   const [result, setResult] = useState<{ ok: boolean; msg: string; mode?: string; counts?: { bookings: number; documents: number; payments: number } } | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -72,6 +73,25 @@ export function PasteEmailFormClient({ tripSlug }: { tripSlug: string }) {
     setResult(null)
   }
 
+  function handleFiles(files: FileList | null) {
+    if (!files) return
+    const arr = Array.from(files)
+    // 25MB total cap mirrors the parser's per-email budget
+    const cap = 25 * 1024 * 1024
+    let total = attachments.reduce((s, f) => s + f.size, 0)
+    const kept: File[] = []
+    for (const f of arr) {
+      if (total + f.size > cap) break
+      kept.push(f)
+      total += f.size
+    }
+    setAttachments((prev) => [...prev, ...kept])
+  }
+
+  function removeAttachment(idx: number) {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx))
+  }
+
   function submit(e: React.FormEvent) {
     e.preventDefault()
     setResult(null)
@@ -80,6 +100,7 @@ export function PasteEmailFormClient({ tripSlug }: { tripSlug: string }) {
     fd.set('from', from)
     fd.set('subject', subject)
     fd.set('body', body)
+    for (const f of attachments) fd.append('attachments', f)
     startTransition(async () => {
       const res = await ingestPastedEmail(fd)
       if (res.error) {
@@ -91,7 +112,7 @@ export function PasteEmailFormClient({ tripSlug }: { tripSlug: string }) {
           mode: res.parserMode,
           counts: res.counts,
         })
-        setFrom(''); setSubject(''); setBody('')
+        setFrom(''); setSubject(''); setBody(''); setAttachments([])
       }
     })
   }
@@ -129,13 +150,40 @@ export function PasteEmailFormClient({ tripSlug }: { tripSlug: string }) {
         />
       </div>
 
+      <div>
+        <label className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Attachments <span className="opacity-60 normal-case tracking-normal">— PDFs, tickets, ticket photos, .ics, etc.</span></label>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-2 text-xs px-3 py-2 border border-dashed border-line rounded-md cursor-pointer hover:bg-line-soft/40 transition">
+            <Paperclip className="w-3.5 h-3.5" />
+            <span>Add file</span>
+            <input
+              type="file"
+              multiple
+              accept=".pdf,application/pdf,image/jpeg,image/png,image/gif,image/webp,text/plain,text/calendar,text/csv,.ics"
+              className="hidden"
+              onChange={(e) => { handleFiles(e.target.files); e.target.value = '' }}
+            />
+          </label>
+          {attachments.map((f, i) => (
+            <span key={`${f.name}-${i}`} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 border border-line rounded-full bg-paper-pure">
+              <Paperclip className="w-3 h-3 text-ink-muted" />
+              <span className="max-w-[180px] truncate" title={f.name}>{f.name}</span>
+              <span className="text-ink-muted text-[10px] num-mono">{(f.size / 1024).toFixed(0)}KB</span>
+              <button type="button" onClick={() => removeAttachment(i)} className="text-ink-muted hover:text-rust ml-1" aria-label={`Remove ${f.name}`}>
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      </div>
+
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs text-ink-muted">
           {process.env.NEXT_PUBLIC_HAS_API_KEY === '1'
             ? <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-sage" /> Live Claude parsing</span>
             : 'Mock parser will be used unless ANTHROPIC_API_KEY is set in .env.local'}
         </div>
-        <button type="submit" disabled={pending || !body.trim()} className="btn-ink">
+        <button type="submit" disabled={pending || (!body.trim() && attachments.length === 0)} className="btn-ink">
           {pending ? 'Parsing…' : <>Send to parser <Send className="w-3.5 h-3.5" /></>}
         </button>
       </div>
