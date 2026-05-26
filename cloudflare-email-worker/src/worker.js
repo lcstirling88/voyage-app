@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Cloudflare Email Worker — receives mail for inbox+{token}@voyage-christiansen.com
  * and forwards the raw RFC822 bytes to Voyage's webhook on Vercel.
