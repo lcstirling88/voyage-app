@@ -1,22 +1,27 @@
 /**
  * Inbound email webhook.
  *
- * Accepts a Postmark-compatible JSON payload (Resend & SendGrid are very similar — adapter
- * is at the top of the handler so swapping providers is a few lines).
+ * Accepts two payload shapes:
  *
- * Routing: emails are addressed inbox+{token}@your-domain.com. We pull the token from the
- * `+`-tag and look up the corresponding Trip. Unknown tokens get a 200 + log so the email
- * service stops retrying — we don't want bounces hitting senders.
+ *   1. RawMime (preferred) — Cloudflare worker just base64-encodes the raw
+ *      RFC822 email and sends { From, To, RawMime, RawSize }. We parse the
+ *      MIME with postal-mime here on the server, which avoids needing to
+ *      ship postal-mime into the Cloudflare worker's bundle (the dashboard
+ *      editor doesn't allow npm or CDN imports). This is the only path that
+ *      reliably preserves binary attachments.
  *
- * Configure in Postmark: Servers → Inbound Stream → Webhook URL.
+ *   2. Postmark-style — { From, To, Subject, TextBody, HtmlBody, Attachments[] }
+ *      Kept for backward compat with existing/old worker deployments and for
+ *      any future Postmark/Resend/SendGrid integration.
  *
- * For local testing, the `/trips/[slug]/inbox` page POSTs to the same parser via a
- * server action, so you don't need a real email service to exercise the parser.
+ * Routing: emails are addressed inbox+{token}@your-domain.com. We pull the
+ * token from the `+`-tag and look up the corresponding Trip.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import PostalMime from 'postal-mime'
 import { prisma } from '@/lib/db'
-import { parseEmail, type EmailInput } from '@/lib/email-parser'
+import { parseEmail, type EmailInput, type EmailAttachmentInput } from '@/lib/email-parser'
 import { persistParserResult } from '@/lib/ingest'
 
 type PostmarkAttachment = {
@@ -26,26 +31,100 @@ type PostmarkAttachment = {
   ContentLength: number
 }
 
-type PostmarkInbound = {
-  From: string
-  To: string
-  Subject: string
+type InboundPayload = {
+  From?: string
+  To?: string
+  Subject?: string
   TextBody?: string
   HtmlBody?: string
   Date?: string
   Attachments?: PostmarkAttachment[]
+  // RawMime path:
+  RawMime?: string  // base64 of the raw RFC822 message
+  RawSize?: number
+}
+
+type NormalizedEmail = {
+  from: string
+  to: string
+  subject: string
+  textBody: string
+  htmlBody: string
+  attachments: EmailAttachmentInput[]
+  // What we report as "what the worker/sender claimed was there" — separate
+  // from `attachments` so we can show 0-byte rows in the UI to distinguish
+  // "decoder dropped it" from "no attachment in the email".
+  reportedAttachments: { filename: string; mimeType: string; size: number }[]
 }
 
 function extractTripToken(to: string): string | null {
-  // inbox+token@domain  -> token
   const m = to.match(/^[^+]+\+([^@]+)@/i)
   return m?.[1] ?? null
 }
 
+/** Parse the raw RFC822 bytes with postal-mime and extract everything we need. */
+async function normalizeFromRawMime(payload: InboundPayload): Promise<NormalizedEmail> {
+  const rawBytes = Buffer.from(payload.RawMime ?? '', 'base64')
+  const parsed = await PostalMime.parse(rawBytes)
+
+  const reportedAttachments: NormalizedEmail['reportedAttachments'] = []
+  const attachments: EmailAttachmentInput[] = []
+  for (const a of parsed.attachments ?? []) {
+    const filename = a.filename || 'attachment'
+    const mimeType = a.mimeType || 'application/octet-stream'
+    const content = a.content
+    const bytes =
+      content instanceof ArrayBuffer ? new Uint8Array(content)
+      : ArrayBuffer.isView(content) ? new Uint8Array(content.buffer, content.byteOffset, content.byteLength)
+      : typeof content === 'string' ? Buffer.from(content, 'binary')
+      : null
+    const size = bytes ? bytes.byteLength : 0
+    reportedAttachments.push({ filename, mimeType, size })
+    if (bytes && bytes.byteLength > 0) {
+      attachments.push({
+        filename,
+        mimeType,
+        contentBase64: Buffer.from(bytes).toString('base64'),
+      })
+    }
+  }
+
+  return {
+    from: parsed.from?.address || payload.From || 'unknown@unknown',
+    to: payload.To || '',
+    subject: parsed.subject || '(no subject)',
+    textBody: parsed.text || '',
+    htmlBody: parsed.html || '',
+    attachments,
+    reportedAttachments,
+  }
+}
+
+/** Read attachments straight from a Postmark-style payload (legacy worker / Postmark integrations). */
+function normalizeFromPostmark(payload: InboundPayload): NormalizedEmail {
+  const reportedAttachments: NormalizedEmail['reportedAttachments'] = []
+  const attachments: EmailAttachmentInput[] = []
+  for (const a of payload.Attachments ?? []) {
+    const filename = a.Name || 'attachment'
+    const mimeType = a.ContentType || 'application/octet-stream'
+    const size = a.ContentLength || Math.floor((a.Content?.length ?? 0) * 0.75)
+    reportedAttachments.push({ filename, mimeType, size })
+    if (a.Content && a.Content.length > 0) {
+      attachments.push({ filename, mimeType, contentBase64: a.Content })
+    }
+  }
+  return {
+    from: payload.From || 'unknown@unknown',
+    to: payload.To || '',
+    subject: payload.Subject || '(no subject)',
+    textBody: payload.TextBody || '',
+    htmlBody: payload.HtmlBody || '',
+    attachments,
+    reportedAttachments,
+  }
+}
+
 export async function POST(req: NextRequest) {
-  // Shared-secret check — when INBOUND_WEBHOOK_SECRET is set in env, require it
-  // in the X-Webhook-Secret header. This stops random people from POSTing fake
-  // bookings into your trips. Disabled when the env var is unset (local dev).
   const expectedSecret = process.env.INBOUND_WEBHOOK_SECRET
   if (expectedSecret) {
     const provided = req.headers.get('x-webhook-secret')
@@ -54,9 +133,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  let payload: PostmarkInbound
+  let payload: InboundPayload
   try {
-    payload = (await req.json()) as PostmarkInbound
+    payload = (await req.json()) as InboundPayload
   } catch {
     return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 })
   }
@@ -65,20 +144,56 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Missing From/To' }, { status: 400 })
   }
 
-  const token = extractTripToken(payload.To)
+  let email: NormalizedEmail
+  try {
+    email = payload.RawMime
+      ? await normalizeFromRawMime(payload)
+      : normalizeFromPostmark(payload)
+  } catch (err) {
+    return NextResponse.json({ ok: false, error: 'MIME parse failed: ' + String(err) }, { status: 400 })
+  }
+
+  console.log('[email-inbound] received', {
+    from: email.from,
+    to: email.to,
+    subject: email.subject.slice(0, 80),
+    format: payload.RawMime ? 'raw-mime' : 'postmark',
+    rawSize: payload.RawSize ?? null,
+    bodyChars: email.textBody.length + email.htmlBody.length,
+    attachmentsReported: email.reportedAttachments.length,
+    attachmentsWithContent: email.attachments.length,
+    attachmentShapes: email.reportedAttachments.map((a) => `${a.filename}|${a.mimeType}|${a.size}B`),
+  })
+
+  const token = extractTripToken(email.to)
   const trip = token ? await prisma.trip.findUnique({ where: { inboxToken: token } }) : null
 
-  // Always persist the incoming email — even if we can't route it, we want a record.
+  // Always persist the incoming email — even if we can't route it.
   const incoming = await prisma.incomingEmail.create({
     data: {
       tripId: trip?.id ?? null,
-      fromAddress: payload.From,
-      toAddress: payload.To,
-      subject: payload.Subject ?? '(no subject)',
-      textBody: payload.TextBody ?? null,
-      htmlBody: payload.HtmlBody ?? null,
+      fromAddress: email.from,
+      toAddress: email.to,
+      subject: email.subject,
+      textBody: email.textBody || null,
+      htmlBody: email.htmlBody || null,
     },
   })
+
+  // Persist all reported attachments (including 0-byte ones) so the email
+  // detail page shows what the worker saw — useful for diagnosing missing
+  // content vs. no attachment at all.
+  if (email.reportedAttachments.length > 0) {
+    await prisma.emailAttachment.createMany({
+      data: email.reportedAttachments.map((a) => ({
+        emailId: incoming.id,
+        filename: a.filename,
+        mimeType: a.mimeType,
+        storagePath: '',
+        size: a.size,
+      })),
+    })
+  }
 
   if (!trip) {
     return NextResponse.json({
@@ -87,62 +202,14 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // Parse + persist
   try {
-    // Two views of the attachments:
-    //  - allReported: every entry the worker handed us, even if Content came
-    //    through empty. We persist all of them so the user can see on the email
-    //    detail page that the worker DID notice an attachment (just with no
-    //    decodable content) — vs. the worker reporting nothing at all (which
-    //    would point at the email client).
-    //  - validForParsing: only entries with actual base64 content, since those
-    //    are the ones we can hand to Claude.
-    const allReported = payload.Attachments ?? []
-    const validForParsing = allReported.filter((a) => a.Content && a.Content.length > 0)
-
-    // Diagnostic log — visible in Vercel runtime logs. Helps us see whether the
-    // Cloudflare worker is sending attachment metadata but no content (postal-mime
-    // parse issue) vs. sending nothing at all (email client stripped them).
-    console.log('[email-inbound] received', {
-      from: payload.From,
-      to: payload.To,
-      subject: payload.Subject?.slice(0, 80),
-      bodyChars: (payload.TextBody?.length ?? 0) + (payload.HtmlBody?.length ?? 0),
-      attachmentsReported: allReported.length,
-      attachmentsWithContent: validForParsing.length,
-      attachmentSummary: allReported.map((a) => `${a.Name || '?'}|${a.ContentType || '?'}|${a.ContentLength ?? 0}B|content=${a.Content?.length ?? 0}chars`),
-    })
-
-    const inputAttachments = validForParsing.map((a) => ({
-      filename: a.Name || 'attachment',
-      mimeType: a.ContentType || 'application/octet-stream',
-      contentBase64: a.Content,
-    }))
-
-    // Persist ALL reported attachments (with or without content) so the UI can
-    // show them. A zero-byte attachment in the list = worker saw a header but
-    // couldn't decode the body.
-    if (allReported.length > 0) {
-      await prisma.emailAttachment.createMany({
-        data: allReported.map((a) => ({
-          emailId: incoming.id,
-          filename: a.Name || 'attachment',
-          mimeType: a.ContentType || 'application/octet-stream',
-          storagePath: '', // content blob isn't persisted yet
-          // Prefer the worker-reported ContentLength (raw bytes); fall back to
-          // the base64 length × 0.75 if the worker didn't include it.
-          size: a.ContentLength || Math.floor((a.Content?.length ?? 0) * 0.75),
-        })),
-      })
-    }
-
     const input: EmailInput = {
-      from: payload.From,
-      to: payload.To,
-      subject: incoming.subject,
-      text: incoming.textBody ?? '',
-      html: incoming.htmlBody ?? undefined,
-      attachments: inputAttachments,
+      from: email.from,
+      to: email.to,
+      subject: email.subject,
+      text: email.textBody,
+      html: email.htmlBody || undefined,
+      attachments: email.attachments,
     }
     const parsed = await parseEmail(input)
     const ingestSummary = await persistParserResult(trip, parsed, incoming.id)
@@ -172,7 +239,6 @@ export async function GET() {
   return NextResponse.json({
     endpoint: 'Voyage inbound email webhook',
     method: 'POST',
-    expects: 'Postmark Inbound JSON payload',
-    docs: 'https://postmarkapp.com/developer/user-guide/inbound/parse-an-email',
+    expects: 'RawMime payload (preferred) or Postmark-style JSON',
   })
 }
