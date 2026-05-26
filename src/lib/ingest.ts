@@ -69,6 +69,34 @@ function normalizeTitle(title: string): string {
 }
 
 async function findDuplicateBooking(tripId: string, b: ParsedBooking): Promise<Booking | null> {
+  // 0. Flight-specific: PNR + type + same calendar day is enough — no title
+  //    check. Re-parsing a flight email (typical case: the body parse gave a
+  //    generic title like "Qantas flight BNE → CHC" and then the user uploads
+  //    the e-ticket PDF, after which Claude produces "QF133 Brisbane →
+  //    Christchurch") would otherwise create a duplicate because the titles
+  //    drifted. Different legs of a multi-leg PNR have different startAt days
+  //    so this won't accidentally collapse them.
+  if (b.type === 'flight' && b.confirmationCode) {
+    const { startDay, endDay } = bookingDayBounds(b)
+    const m = await prisma.booking.findFirst({
+      where: {
+        tripId,
+        type: 'flight',
+        confirmationCode: b.confirmationCode,
+        startAt: { gte: startDay, lte: endDay },
+      },
+    })
+    if (m) return m
+    // Fallback: if the existing record has this PNR + type but landed on the
+    // wrong day (Claude used a midnight placeholder, or got the date wrong on
+    // the body-only parse), match it as long as it's the only flight with this
+    // PNR in the trip. Creating a duplicate is the worse outcome.
+    const anyWithCode = await prisma.booking.findMany({
+      where: { tripId, type: 'flight', confirmationCode: b.confirmationCode },
+    })
+    if (anyWithCode.length === 1) return anyWithCode[0]
+  }
+
   // 1. Strongest match: same confirmation code AND same type AND same "core title"
   //    (room/suite descriptors after the en-dash are ignored). This catches the
   //    "same hotel forwarded twice with slightly different parsing" case while
