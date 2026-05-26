@@ -257,21 +257,22 @@ function HotelCheckinCard({ booking, time, tripSlug }: { booking: Booking; time:
     ? Math.max(1, differenceInDays(startOfDay(booking.endAt), startOfDay(booking.startAt)))
     : 1
   return (
-    <div className="border border-line rounded-xl bg-paper-pure overflow-hidden">
-      <div className="flex flex-col sm:flex-row">
-        <div className={`h-24 sm:h-auto sm:w-40 ${imgForBooking(booking.type, booking.title)} shrink-0 relative`}>
-          <div className="absolute bottom-2 left-2 text-paper-pure text-[10px] uppercase tracking-[0.18em] bg-ink/40 backdrop-blur px-2 py-1 rounded">
+    <div className="border border-line rounded-xl bg-paper-pure p-3 sm:p-4">
+      {/* Top row: square image + title block + status/delete */}
+      <div className="flex items-start gap-3 sm:gap-4">
+        <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-lg ${imgForBooking(booking.type, booking.title)} shrink-0 relative overflow-hidden`}>
+          <div className="absolute inset-x-1 bottom-1 text-paper-pure text-[9px] uppercase tracking-[0.14em] bg-ink/50 backdrop-blur px-1.5 py-0.5 rounded text-center">
             Check in{time ? ` · ${time.display}` : ''}
           </div>
         </div>
-        <div className="p-4 sm:p-5 flex-1 min-w-0">
+        <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
                 Hotel · {nights} {nights === 1 ? 'night' : 'nights'}
               </div>
-              <h3 className="font-display text-xl sm:text-2xl mt-1">{booking.title}</h3>
-              {booking.address && <p className="text-xs sm:text-sm text-ink-muted mt-1">{booking.address}</p>}
+              <h3 className="font-display text-lg sm:text-xl mt-0.5 leading-tight">{booking.title}</h3>
+              {booking.address && <p className="text-xs text-ink-muted mt-1 line-clamp-2">{booking.address}</p>}
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {booking.paid ? (
@@ -282,12 +283,22 @@ function HotelCheckinCard({ booking, time, tripSlug }: { booking: Booking; time:
               <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-4 text-xs">
-            <div><div className="text-ink-muted">Check-in</div><div className="font-medium mt-0.5">{formatTime(meta.checkIn, '—')}</div></div>
-            <div><div className="text-ink-muted">Check-out</div><div className="font-medium mt-0.5">{formatTime(meta.checkOut, '—')}</div></div>
-            <div><div className="text-ink-muted">Breakfast</div><div className="font-medium mt-0.5 text-sage truncate">{meta.breakfast ?? '—'}</div></div>
-            <div><div className="text-ink-muted">Confirmation</div><div className="font-medium mt-0.5 num-mono truncate">{booking.confirmationCode ?? '—'}</div></div>
-          </div>
+        </div>
+      </div>
+
+      {/* Detail row — full card width, check-out moved off this card */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-3 text-xs">
+        <div>
+          <div className="text-ink-muted">Check-in</div>
+          <div className="font-medium mt-0.5">{formatTime(meta.checkIn, '—')}</div>
+        </div>
+        <div>
+          <div className="text-ink-muted">Breakfast</div>
+          <div className="font-medium mt-0.5 text-sage truncate">{meta.breakfast ?? '—'}</div>
+        </div>
+        <div>
+          <div className="text-ink-muted">Confirmation</div>
+          <div className="font-medium mt-0.5 num-mono truncate">{booking.confirmationCode ?? '—'}</div>
         </div>
       </div>
     </div>
@@ -295,13 +306,17 @@ function HotelCheckinCard({ booking, time, tripSlug }: { booking: Booking; time:
 }
 
 function HotelCheckoutRow({ booking, time, tripSlug }: { booking: Booking; time: ParsedTime | null; tripSlug: string }) {
+  const meta = safeJson<Record<string, string>>(booking.metadata) ?? {}
+  // Prefer the parsed time-of-day from the booking; fall back to whatever metadata says.
+  const metaCheckout = meta.checkOut ? formatTime(meta.checkOut, '') : ''
+  const checkoutTime = time?.display || metaCheckout
   return (
     <div className="border border-line rounded-lg bg-paper-pure px-4 py-2.5 flex items-center gap-3 text-sm">
       <LogOut className="w-4 h-4 text-rust shrink-0" />
       <div className="flex-1 min-w-0">
-        <span className="text-ink-muted">Check out</span>{' '}
-        {time && <span className="num-mono">{time.display}</span>}{' '}
-        <span className="text-ink-muted">from</span>{' '}
+        <span className="text-ink-muted">Check out</span>
+        {checkoutTime && <> <span className="num-mono">{checkoutTime}</span></>}
+        <span className="text-ink-muted"> from </span>
         <span className="font-medium">{booking.title}</span>
       </div>
       <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
