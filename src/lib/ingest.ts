@@ -29,14 +29,25 @@ export type IngestSummary = {
 }
 
 async function findDuplicateBooking(tripId: string, b: ParsedBooking): Promise<Booking | null> {
-  // 1. Strongest match: exact confirmation code
+  // 1. Strongest match: same confirmation code AND same type AND same title.
+  //    The type+title constraint is critical — multi-item orders (e.g. a single
+  //    Cardrona order containing ski lessons + lift pass + rental) share one
+  //    confirmation code but are DIFFERENT bookings. Matching code alone would
+  //    cause the second and third items to clobber the first.
   if (b.confirmationCode) {
     const m = await prisma.booking.findFirst({
-      where: { tripId, confirmationCode: b.confirmationCode },
+      where: {
+        tripId,
+        confirmationCode: b.confirmationCode,
+        type: b.type,
+        title: b.title,
+      },
     })
     if (m) return m
   }
-  // 2. Same type + vendor + same startAt calendar day
+  // 2. Same type + vendor + same title + same startAt calendar day.
+  //    (Title check stops Booking.com confirmations on the same day for different
+  //    hotels from merging.)
   if (b.vendor) {
     const startDay = startOfDay(new Date(b.startAt))
     const endDay = endOfDay(new Date(b.startAt))
@@ -45,12 +56,15 @@ async function findDuplicateBooking(tripId: string, b: ParsedBooking): Promise<B
         tripId,
         type: b.type,
         vendor: b.vendor,
+        title: b.title,
         startAt: { gte: startDay, lte: endDay },
       },
     })
     if (m) return m
   }
-  // 3. (Loose) Same type + title + same startAt day
+  // 3. Same type + same title + same startAt day (loose — covers cases where
+  //    confirmation code differs between a confirmation email and its later receipt
+  //    but the activity itself is the same).
   const startDay = startOfDay(new Date(b.startAt))
   const endDay = endOfDay(new Date(b.startAt))
   const m = await prisma.booking.findFirst({

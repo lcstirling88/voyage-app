@@ -9,6 +9,7 @@ import { InlineDeleteButton } from '@/components/InlineDeleteButton'
 import {
   planForDay, SESSIONS, SESSION_LABEL, formatTime,
   hotelOrderForTrip, sleepingTonightFor, getPalette, colorForHotel,
+  cleanHotelName, cityForBooking,
   type DayPlan, type Session, type SessionItem, type ParsedTime, type PaletteSpec,
 } from '@/lib/itinerary'
 import type { Booking } from '@prisma/client'
@@ -138,7 +139,13 @@ function DayBlock({
           style={{ background: hotelColor, color: paletteTextColor }}
         >
           <BedDouble className="w-3 h-3" />
-          <span className="truncate font-medium">{sleepingTonight.title}</span>
+          <span className="truncate font-medium">
+            {(() => {
+              const city = cityForBooking(sleepingTonight)
+              const name = cleanHotelName(sleepingTonight.title)
+              return city ? `${city} — ${name}` : name
+            })()}
+          </span>
         </div>
       )}
       {!sleepingTonight && (

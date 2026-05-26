@@ -150,6 +150,32 @@ export function hotelOrderForTrip(bookings: readonly Booking[]): string[] {
 }
 
 /**
+ * Strip the room-type / suite descriptor that comes after an en-dash or em-dash
+ * in many hotel booking titles. "Galaxy Boutique Hotel – Two-Bedroom Lake View
+ * Suite" → "Galaxy Boutique Hotel".
+ */
+export function cleanHotelName(title: string): string {
+  const m = title.match(/^([\s\S]+?)\s+[–—]\s+/)
+  return m ? m[1].trim() : title
+}
+
+/**
+ * Extract a sensible city label for a booking. Prefers booking.location; falls
+ * back to a heuristic on booking.address (second-to-last comma-separated chunk,
+ * with postcodes stripped). Returns null if nothing usable found.
+ */
+export function cityForBooking(b: Pick<Booking, 'location' | 'address'>): string | null {
+  if (b.location && b.location.trim()) return b.location.trim()
+  if (!b.address) return null
+  const parts = b.address
+    .split(',')
+    .map((s) => s.trim().replace(/^\d{4,6}\s+/, '').replace(/\s+\d{4,6}$/, '').replace(/^\d{4,6}$/, '').trim())
+    .filter(Boolean)
+  if (parts.length >= 2) return parts[parts.length - 2] || null
+  return parts[0] || null
+}
+
+/**
  * Find the hotel booking that covers the NIGHT of the given day, if any.
  * Hotel covers nights from startAt (inclusive) to endAt-1 (inclusive). On the
  * endAt day itself you've already checked out in the morning.
