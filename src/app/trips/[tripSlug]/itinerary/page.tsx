@@ -338,11 +338,10 @@ function HotelCheckoutRow({ booking, time, tripSlug }: { booking: Booking; time:
         <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
       </div>
 
-      {/* Hotel title — full card width */}
+      {/* Hotel title — full card width. Address omitted: it's already on the
+          check-in card for the same booking, so repeating it here just adds
+          noise to the check-out row. */}
       <h3 className="font-medium text-sm sm:text-base mt-1.5 leading-tight">{booking.title}</h3>
-
-      {/* Address — full card width */}
-      {booking.address && <p className="text-xs text-ink-muted mt-1">{booking.address}</p>}
     </div>
   )
 }
