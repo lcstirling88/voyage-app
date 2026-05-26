@@ -261,6 +261,9 @@ function ItemRow({
     case 'car-return':
       return <CarRow booking={item.booking} kind="return" time={item.time} tripSlug={tripSlug} />
     case 'booking':
+      if (item.booking.type === 'restaurant') {
+        return <RestaurantRow booking={item.booking} tripSlug={tripSlug} />
+      }
       return <BookingRow booking={item.booking} position={item.position} tripSlug={tripSlug} homeCurrency={homeCurrency} currentDate={currentDate} />
   }
 }
@@ -399,7 +402,49 @@ function CarRow({
 }
 
 // ============================================================================
-// Regular booking row (activity, restaurant, flight, transit, other)
+// Restaurant row — slim card showing just name, time, who it's booked under,
+// and address. The full card is a link to the booking detail page for any
+// extra info the restaurant supplied (notes, dress code, allergens, etc.).
+// ============================================================================
+
+function RestaurantRow({ booking, tripSlug }: { booking: Booking; tripSlug: string }) {
+  const meta = safeJson<Record<string, string | number>>(booking.metadata) ?? {}
+  // The parser is asked to put the reservation holder's name in metadata.bookedUnder;
+  // older parses might have it under different keys, so check a few common shapes.
+  const bookedUnderRaw = (meta.bookedUnder ?? meta.guestName ?? meta.reservationName ?? meta.partyName) as string | undefined
+  const bookedUnder = typeof bookedUnderRaw === 'string' && bookedUnderRaw.trim() ? bookedUnderRaw.trim() : null
+  const partySizeRaw = meta.partySize ?? meta.pax ?? meta.guests
+  const partySize = typeof partySizeRaw === 'number' || (typeof partySizeRaw === 'string' && partySizeRaw.trim())
+    ? String(partySizeRaw)
+    : null
+  const timeLabel = fmtTime(booking.startAt)
+
+  return (
+    <div className="border border-line rounded-xl bg-paper-pure p-3 sm:p-4 hover:border-sage transition">
+      {/* Header line: Utensils icon + Restaurant · time on left, delete on right */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2 min-w-0">
+          <Utensils className="w-3 h-3 shrink-0" />
+          <span className="truncate">
+            Restaurant{timeLabel ? ` · ${timeLabel}` : ''}{partySize ? ` · table for ${partySize}` : ''}
+          </span>
+        </div>
+        <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
+      </div>
+
+      {/* Linked body — restaurant name, who it's booked under, address */}
+      <Link href={`/trips/${tripSlug}/booking/${booking.id}`} className="block">
+        <h3 className="font-medium text-sm sm:text-base mt-1.5 leading-tight">{booking.title}</h3>
+        {bookedUnder && <p className="text-xs text-ink-muted mt-1">Booked under {bookedUnder}</p>}
+        {booking.address && <p className="text-xs text-ink-muted mt-1">{booking.address}</p>}
+      </Link>
+    </div>
+  )
+}
+
+// ============================================================================
+// Regular booking row (activity, flight, transit, other — restaurants are
+// handled by RestaurantRow above)
 // ============================================================================
 
 function BookingRow({

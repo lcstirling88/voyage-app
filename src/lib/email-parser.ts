@@ -152,7 +152,7 @@ GUIDELINES:
 - One email can contain multiple bookings (e.g. a flight itinerary with outbound + return, or a hotel + airport transfer).
 - Hotel emails: type "hotel", startAt = check-in datetime, endAt = check-out datetime, put breakfast/checkIn/checkOut/nights in metadata.
 - Flight emails: type "flight", startAt = departure, endAt = arrival, put seats/class/baggage in metadata.
-- Restaurant emails: type "restaurant", startAt = reservation time.
+- Restaurant emails: type "restaurant", startAt = reservation time. Put the name the booking is held under in metadata.bookedUnder (e.g. "Lauren Stirling"), and the party size in metadata.partySize (e.g. 2) when stated.
 - Tour/activity emails: type "activity". If the activity spans multiple days (e.g. "4-day ski lessons", "3-day cooking course"), set endAt to the last day so it shows on each day of its span.
 - Car rental emails: type "car", startAt = pickup datetime, endAt = return datetime, location = pickup location, put dropoffLocation/vehicle/insurance in metadata.
 - If the email is a visa approval, insurance policy, or similar non-booking document, return it under documents instead of bookings.
