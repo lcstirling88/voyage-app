@@ -144,31 +144,55 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Missing From/To' }, { status: 400 })
   }
 
+  // Log every inbound request before doing anything else, so even a complete
+  // parser failure still leaves a trail in the Vercel runtime logs.
+  console.log('[email-inbound] payload arrived', {
+    from: payload.From,
+    to: payload.To,
+    format: payload.RawMime ? 'raw-mime' : 'postmark',
+    rawSize: payload.RawSize ?? null,
+    rawMimeChars: payload.RawMime?.length ?? 0,
+    legacyAttachmentCount: payload.Attachments?.length ?? 0,
+  })
+
+  // Parse to whatever extent we can — but don't bail on failure. Worst case we
+  // still want a row in IncomingEmail so the user sees the message showed up
+  // and can fall back to manual paste / re-parse.
   let email: NormalizedEmail
+  let parseError: string | null = null
   try {
     email = payload.RawMime
       ? await normalizeFromRawMime(payload)
       : normalizeFromPostmark(payload)
   } catch (err) {
-    return NextResponse.json({ ok: false, error: 'MIME parse failed: ' + String(err) }, { status: 400 })
+    parseError = String(err)
+    console.error('[email-inbound] MIME parse failed:', err)
+    email = {
+      from: payload.From || 'unknown@unknown',
+      to: payload.To || '',
+      subject: payload.Subject || '(MIME parse failed — see error below)',
+      textBody: payload.TextBody || '',
+      htmlBody: payload.HtmlBody || '',
+      attachments: [],
+      reportedAttachments: [],
+    }
   }
 
-  console.log('[email-inbound] received', {
+  console.log('[email-inbound] normalized', {
     from: email.from,
     to: email.to,
     subject: email.subject.slice(0, 80),
-    format: payload.RawMime ? 'raw-mime' : 'postmark',
-    rawSize: payload.RawSize ?? null,
     bodyChars: email.textBody.length + email.htmlBody.length,
     attachmentsReported: email.reportedAttachments.length,
     attachmentsWithContent: email.attachments.length,
     attachmentShapes: email.reportedAttachments.map((a) => `${a.filename}|${a.mimeType}|${a.size}B`),
+    parseError,
   })
 
   const token = extractTripToken(email.to)
   const trip = token ? await prisma.trip.findUnique({ where: { inboxToken: token } }) : null
 
-  // Always persist the incoming email — even if we can't route it.
+  // Always persist the incoming email — even if we can't parse or route it.
   const incoming = await prisma.incomingEmail.create({
     data: {
       tripId: trip?.id ?? null,
@@ -177,6 +201,8 @@ export async function POST(req: NextRequest) {
       subject: email.subject,
       textBody: email.textBody || null,
       htmlBody: email.htmlBody || null,
+      errorMsg: parseError,
+      processed: parseError ? true : false, // mark parse-failures as terminal
     },
   })
 
@@ -199,6 +225,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       warning: `No trip matched token "${token}". Email stored unrouted (id ${incoming.id}).`,
+    })
+  }
+
+  // If MIME parsing already blew up upstream, skip running the LLM parser
+  // (the body and attachments will both be empty) — the email is at least
+  // recorded with the error visible on the detail page.
+  if (parseError) {
+    return NextResponse.json({
+      ok: true,
+      warning: `Stored as id ${incoming.id} but MIME parse failed: ${parseError}`,
     })
   }
 
