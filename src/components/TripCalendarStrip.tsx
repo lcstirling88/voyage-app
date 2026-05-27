@@ -180,18 +180,14 @@ function MonthGrid({
           }
 
           const isToday = dateKey === todayKey
-          // For today's cell, draw a thick ring outside the cell using box-shadow
-          // in the palette's contrast colour. Three layers:
-          //   1) bg fill (if any) from baseStyle
-          //   2) a 2px gap of paper-pure (so the ring visually separates from
-          //      the city colour)
-          //   3) a 3px ring in palette.textOnColor as the actual outline
-          // Result: today reads as a clearly outlined chip regardless of palette.
+          // For today's cell, draw an INSET ring inside the cell. Drawing
+          // outside the cell with a regular box-shadow gets clipped by the
+          // multi-month swipe container's overflow-x — inset doesn't.
           const baseStyle: React.CSSProperties = bgColor
             ? { background: bgColor, color: palette.textOnColor }
             : {}
           const todayShadow = isToday
-            ? `0 0 0 2px var(--color-paper-pure, #FBF8F1), 0 0 0 5px ${palette.textOnColor}`
+            ? `inset 0 0 0 3px ${palette.textOnColor}`
             : undefined
           const cellStyle: React.CSSProperties = {
             ...baseStyle,
