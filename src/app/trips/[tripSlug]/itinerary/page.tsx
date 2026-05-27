@@ -101,7 +101,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
   return (
     <>
       {heroImage ? (
-        <div className="relative h-[30vh] min-h-[210px] sm:h-[40vh] sm:min-h-[300px] lg:min-h-[360px] bg-ink overflow-hidden">
+        <div className="relative h-[26vh] min-h-[180px] sm:h-[38vh] sm:min-h-[280px] lg:min-h-[340px] bg-ink overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element -- external CDN image, next/image needs domain config */}
           <img
             src={heroImage.src}

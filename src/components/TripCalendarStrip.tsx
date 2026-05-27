@@ -43,8 +43,8 @@ export function TripCalendarStrip({
 
   return (
     <section className="bg-paper-pure border-b border-line">
-      <div className="px-4 sm:px-10 py-4 sm:py-6 max-w-5xl">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
+      <div className="px-4 sm:px-10 py-3 sm:py-5 max-w-5xl">
+        <div className="flex items-center justify-between mb-2 sm:mb-3">
           <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
             Where you are
           </div>
@@ -137,7 +137,7 @@ function MonthGrid({
 
   return (
     <div>
-      <div className="font-display text-base sm:text-lg mb-2 sm:mb-3">
+      <div className="font-display text-base sm:text-lg mb-1.5 sm:mb-2">
         {format(monthStart, 'MMMM yyyy')}
       </div>
 
@@ -200,7 +200,7 @@ function MonthGrid({
 
 function Legend({ cityOrder, palette }: { cityOrder: string[]; palette: PaletteSpec }) {
   return (
-    <div className="mt-3 sm:mt-5 pt-3 border-t border-line-soft flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] uppercase tracking-[0.16em]">
+    <div className="mt-2 sm:mt-4 pt-2 border-t border-line-soft flex flex-wrap gap-x-2.5 gap-y-1 text-[10px] uppercase tracking-[0.16em]">
       {cityOrder.map((city) => {
         const bg = lookupCityColor(city, cityOrder, palette)
         return (
