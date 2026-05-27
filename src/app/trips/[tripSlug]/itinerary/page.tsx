@@ -93,6 +93,10 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
     })
   }
 
+  // TEMPORARY: hardcoded so the user can verify the "today" ring on the
+  // calendar before the trip starts. Revert to `new Date()` after sign-off.
+  const today = new Date('2026-06-26T12:00:00Z')
+
   // Iconic destination photo + country label for the hero. Falls back to the
   // existing gradient header for destinations we don't have a curated image for.
   const destProfile = profileForDestination(trip.destination)
@@ -150,6 +154,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
         cityOrder={cityOrder}
         palette={palette}
         tripSlug={trip.slug}
+        today={today}
       />
 
       <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-5xl space-y-10 sm:space-y-12">
@@ -198,11 +203,13 @@ function DayBlock({
   paletteTextColor: string
 }) {
   return (
-    <div id={`day-${dateKey}`} className="tline pl-8 sm:pl-10 scroll-mt-6 sm:scroll-mt-10">
+    <div id={`day-${dateKey}`} className="tline pl-8 sm:pl-10 scroll-mt-24 sm:scroll-mt-20">
       <div className="tline-dot" />
       <div className="flex items-center gap-3 mb-2">
-        <span className="font-display text-3xl sm:text-4xl">Day {String(idx + 1).padStart(2, '0')}</span>
-        <span className="text-ink-muted text-xs sm:text-sm flex-1 truncate">{format(day, 'EEEE, MMM d')}</span>
+        <span className="font-display text-3xl sm:text-4xl">
+          {format(day, 'MMM d')} <span className="text-ink-muted">({format(day, 'EEE')})</span>
+        </span>
+        <span className="flex-1" />
         <Link
           href={`/trips/${tripSlug}/itinerary/add?date=${dateKey}`}
           aria-label="Add to this day"

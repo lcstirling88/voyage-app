@@ -24,7 +24,7 @@ type DayInfo = {
 }
 
 export function TripCalendarStrip({
-  startDate, endDate, daysByDate, cityOrder, palette, tripSlug,
+  startDate, endDate, daysByDate, cityOrder, palette, tripSlug, today,
 }: {
   startDate: Date
   endDate: Date
@@ -32,7 +32,10 @@ export function TripCalendarStrip({
   cityOrder: string[]
   palette: PaletteSpec
   tripSlug: string
+  /** Date treated as "today" for the highlight ring. Defaults to current time. */
+  today?: Date
 }) {
+  const todayDay = startOfDay(today ?? new Date())
   // Every month that overlaps the trip range
   const months = eachMonthOfInterval({
     start: startOfMonth(startDate),
@@ -84,6 +87,7 @@ export function TripCalendarStrip({
                   cityOrder={cityOrder}
                   palette={palette}
                   tripSlug={tripSlug}
+                  today={todayDay}
                 />
               </div>
             ))}
@@ -97,6 +101,7 @@ export function TripCalendarStrip({
             cityOrder={cityOrder}
             palette={palette}
             tripSlug={tripSlug}
+            today={todayDay}
           />
         )}
 
@@ -109,7 +114,7 @@ export function TripCalendarStrip({
 }
 
 function MonthGrid({
-  monthStart, tripStart, tripEnd, daysByDate, cityOrder, palette, tripSlug,
+  monthStart, tripStart, tripEnd, daysByDate, cityOrder, palette, tripSlug, today,
 }: {
   monthStart: Date
   tripStart: Date
@@ -118,6 +123,7 @@ function MonthGrid({
   cityOrder: string[]
   palette: PaletteSpec
   tripSlug: string
+  today: Date
 }) {
   const monthEnd = endOfMonth(monthStart)
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd })
@@ -171,20 +177,35 @@ function MonthGrid({
             )
           }
 
-          const sharedCellStyle = bgColor
+          const isToday = day.getTime() === today.getTime()
+          // For today's cell, draw a 2px ring outside the cell using box-shadow
+          // in the palette's contrast colour (palette.textOnColor — dark for the
+          // pastel palette, light for jewel / mono). Sits cleanly inside the 4px
+          // grid gap so it doesn't clip the neighbours.
+          const baseStyle: React.CSSProperties = bgColor
             ? { background: bgColor, color: palette.textOnColor }
+            : {}
+          const todayBoxShadow = isToday
+            ? `0 0 0 2px ${palette.textOnColor}`
             : undefined
-          const sharedCellClass = `aspect-square rounded-md grid place-items-center text-xs font-medium transition hover:scale-105 hover:shadow ${
+          const cellStyle: React.CSSProperties = {
+            ...baseStyle,
+            ...(todayBoxShadow ? { boxShadow: todayBoxShadow } : {}),
+          }
+          const cellClass = `aspect-square rounded-md grid place-items-center text-xs font-medium transition hover:scale-105 hover:shadow ${
             bgColor ? '' : 'bg-line-soft text-ink-soft'
-          }`
+          } ${isToday ? 'font-bold' : ''}`
 
           return (
             <a
               key={dateKey}
               href={`#day-${dateKey}`}
-              className={sharedCellClass}
-              style={sharedCellStyle}
-              title={city ? `${format(day, 'EEE MMM d')} — ${city}` : `${format(day, 'EEE MMM d')} — no accommodation booked`}
+              className={cellClass}
+              style={cellStyle}
+              title={
+                (city ? `${format(day, 'EEE MMM d')} — ${city}` : `${format(day, 'EEE MMM d')} — no accommodation booked`) +
+                (isToday ? ' (today)' : '')
+              }
             >
               {format(day, 'd')}
             </a>
