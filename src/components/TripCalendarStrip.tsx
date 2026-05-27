@@ -180,18 +180,22 @@ function MonthGrid({
           }
 
           const isToday = dateKey === todayKey
-          // For today's cell, draw an INSET ring inside the cell. Drawing
-          // outside the cell with a regular box-shadow gets clipped by the
-          // multi-month swipe container's overflow-x — inset doesn't.
+          // Build the cell's resting style first (city bg + contrast text colour).
           const baseStyle: React.CSSProperties = bgColor
             ? { background: bgColor, color: palette.textOnColor }
             : {}
-          const todayShadow = isToday
-            ? `inset 0 0 0 3px ${palette.textOnColor}`
-            : undefined
+          // For today's cell, derive an in-family tint of the city colour and
+          // use it for BOTH the inset ring and the day number. Lighter palettes
+          // (pastel: dark contrast text → light cells) get a darker tint;
+          // darker palettes (jewel / mono: light contrast text → dark cells)
+          // get a lighter tint. End result: a "lighter purple" sort of accent
+          // on jewel amethyst, a deeper-rose accent on pastel, etc.
+          const todayAccent = isToday ? deriveTodayAccent(bgColor, palette) : null
           const cellStyle: React.CSSProperties = {
             ...baseStyle,
-            ...(todayShadow ? { boxShadow: todayShadow } : {}),
+            ...(isToday && todayAccent
+              ? { boxShadow: `inset 0 0 0 2px ${todayAccent}`, color: todayAccent }
+              : {}),
           }
           const cellClass = `aspect-square rounded-md grid place-items-center text-xs transition hover:scale-105 ${
             bgColor ? '' : 'bg-line-soft text-ink-soft'
@@ -244,4 +248,31 @@ function lookupCityColor(city: string, cityOrder: string[], palette: PaletteSpec
   const idx = cityOrder.indexOf(city)
   const safe = idx < 0 ? 0 : idx
   return palette.colors[safe % palette.colors.length]
+}
+
+/**
+ * Compute the "today" accent colour for a calendar cell. We want a tint that's
+ * recognisably in the same colour family as the cell's city colour but with
+ * enough contrast to stand out as the day marker.
+ *
+ *   - On dark-palette cells (jewel, mono — textOnColor is light/cream), the
+ *     cell is dark, so we lighten the city colour: e.g. a dark amethyst cell
+ *     gets a soft lavender accent.
+ *   - On light-palette cells (pastel — textOnColor is dark brown), the cell
+ *     is light, so we darken the city colour: e.g. a powder-blue cell gets
+ *     a deeper teal accent.
+ *
+ * Uses CSS color-mix at render time so the browser does the actual blending.
+ * Cells with no city colour (no accommodation that night) fall back to the
+ * palette's plain contrast colour as the accent.
+ */
+function deriveTodayAccent(bgColor: string | null, palette: PaletteSpec): string {
+  if (!bgColor) return palette.textOnColor
+  // First byte of the hex contrast colour: < 128 = a dark text colour, which
+  // means the palette's cells are light overall.
+  const firstByte = parseInt(palette.textOnColor.slice(1, 3), 16)
+  const cellIsLight = !Number.isNaN(firstByte) && firstByte < 128
+  return cellIsLight
+    ? `color-mix(in srgb, ${bgColor} 55%, black)`     // light cell → darker in-family tint
+    : `color-mix(in srgb, ${bgColor} 45%, white)`     // dark cell → lighter in-family tint
 }
