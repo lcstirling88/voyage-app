@@ -9,12 +9,12 @@
  * we'd swap to countries-50m.json.
  */
 
-import { geoPath } from 'd3-geo'
-// Winkel Tripel — the projection National Geographic uses for their world
-// atlas. Compromise between equal-area and conformal, with a softer rounded
-// silhouette than Natural Earth that reads more "magazine atlas" inside a
-// fancy frame. Bundled via d3-geo-projection (not in base d3-geo).
-import { geoWinkel3 } from 'd3-geo-projection'
+// Equal Earth (Šavrič et al, 2018) — modern equal-area projection with a
+// softer curved silhouette and minimal polar stretching. The default
+// projection used by Wikipedia's world maps and a lot of contemporary atlases;
+// reads more "polished" than Winkel Tripel without the heavy distortion of
+// Mercator at the poles.
+import { geoPath, geoEqualEarth } from 'd3-geo'
 import { feature } from 'topojson-client'
 import type { GeometryCollection, Topology } from 'topojson-specification'
 import worldAtlas from 'world-atlas/countries-110m.json'
@@ -212,11 +212,10 @@ export function renderHintsFromCountries(
 export const ATLAS_VIEW_WIDTH = 980
 export const ATLAS_VIEW_HEIGHT = 480
 
-// Scale picked so the projection fills the viewBox horizontally with a small
-// margin. Winkel Tripel's bounding ratio is ~1.7:1 at scale 1; tuned by eye
-// to land cleanly inside our 980×480 frame.
-const projection = geoWinkel3()
-  .scale(ATLAS_VIEW_WIDTH / 6.4)
+// Equal Earth's bounding ratio is roughly 2.05:1, so scale ≈ width / 5.4
+// fills the 980-wide viewBox horizontally with a small margin. Tuned by eye.
+const projection = geoEqualEarth()
+  .scale(ATLAS_VIEW_WIDTH / 5.4)
   .translate([ATLAS_VIEW_WIDTH / 2, ATLAS_VIEW_HEIGHT / 2])
 const pathGen = geoPath(projection)
 
