@@ -1,9 +1,16 @@
-import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
-import { Sidebar } from '@/components/Sidebar'
 import { TopBar } from '@/components/TopBar'
-import { SidebarStateProvider } from '@/components/SidebarStateProvider'
 
+/**
+ * Trip layout — no sidebar. The previous left rail (trip switcher, feature
+ * menu, profile footer) has been replaced by the app-tile grid on the
+ * Overview page, which is the "home screen" of each trip. Navigation flows:
+ *
+ *   • Within a trip: tiles on Overview → feature page; breadcrumb back to
+ *     Overview via the TopBar.
+ *   • Switching trips: breadcrumb "Trips" → /trips list.
+ *   • Sign-out / profile: the welcome page (/) carries the global nav.
+ */
 export default async function TripLayout({
   children,
   params,
@@ -12,21 +19,12 @@ export default async function TripLayout({
   params: Promise<{ tripSlug: string }>
 }) {
   const { tripSlug } = await params
-  const { trip, user } = await requireTripAccess(tripSlug)
-
-  const emailCount = await prisma.incomingEmail.count({
-    where: { tripId: trip.id, processed: false },
-  })
+  const { trip } = await requireTripAccess(tripSlug)
 
   return (
-    <SidebarStateProvider>
-      <div className="lg:flex min-h-screen">
-        <Sidebar trip={trip} emailCount={emailCount} currentUserId={user.id} />
-        <main className="flex-1 min-w-0">
-          <TopBar trip={trip} />
-          {children}
-        </main>
-      </div>
-    </SidebarStateProvider>
+    <main className="min-h-screen">
+      <TopBar trip={trip} />
+      {children}
+    </main>
   )
 }

@@ -1,18 +1,20 @@
 import Link from 'next/link'
 import {
-  CalendarDays, Wallet, CloudSun, Globe2, Folder, ListChecks, ArrowUpRight,
+  CalendarDays, Wallet, CloudSun, Globe2, Folder, ListChecks,
+  Mail, Settings as SettingsIcon, ArrowUpRight,
 } from 'lucide-react'
 
 /**
- * App-launcher grid that lives at the top of each trip's Overview page.
- * Six tiles — one per major trip feature — replacing the old sidebar menu.
- * Each tile carries a live one-line stat preview so the grid functions
- * like a row of app widgets, not just labelled buttons.
+ * App-launcher grid — the entire navigation surface for a trip. Eight
+ * tiles replacing the old left-rail sidebar: six core features
+ * (Itinerary / Costs / Weather / Local Info / Documents / Packing) plus
+ * two utility tiles (Forward bookings / Trip settings) that used to live
+ * in the sidebar footer.
  *
- * Icon tints reuse the existing palette (sage gradient + gold + terracotta
- * + burgundy) so the grid feels native to the rest of the app rather than
- * iOS-tile bubblegum. Tiles share a uniform shape; differentiation comes
- * from the icon tint + content.
+ * Each tile carries a live one-line stat preview so the grid functions
+ * like a row of app widgets, not just labelled buttons. Icon tints reuse
+ * the existing palette (sage gradient + gold + terracotta + burgundy)
+ * so the row reads as one composed family rather than iOS rainbow tiles.
  */
 
 type TileSpec = {
@@ -34,6 +36,8 @@ export function TripFeatureTiles({
   localPreview,
   documentsPreview,
   packingPreview,
+  inboxPreview,
+  settingsPreview,
 }: {
   tripSlug: string
   itineraryPreview: string
@@ -42,6 +46,8 @@ export function TripFeatureTiles({
   localPreview: string
   documentsPreview: string
   packingPreview: string
+  inboxPreview: string
+  settingsPreview: string
 }) {
   const tiles: TileSpec[] = [
     {
@@ -92,14 +98,30 @@ export function TripFeatureTiles({
       tintBg: 'rgba(107, 39, 55, 0.10)', // burgundy wash (matches Home tier)
       tintFg: '#6B2737',
     },
+    {
+      href: `/trips/${tripSlug}/inbox`,
+      label: 'Forward bookings',
+      preview: inboxPreview,
+      Icon: Mail,
+      tintBg: 'rgba(92, 73, 56, 0.10)',  // warm taupe wash — utility neutral
+      tintFg: '#5C4938',
+    },
+    {
+      href: `/trips/${tripSlug}/settings`,
+      label: 'Trip settings',
+      preview: settingsPreview,
+      Icon: SettingsIcon,
+      tintBg: 'rgba(101, 101, 110, 0.10)', // cool taupe wash — utility neutral
+      tintFg: '#52525B',
+    },
   ]
 
   return (
-    <div className="px-5 sm:px-10 pt-8 sm:pt-10 pb-2 max-w-7xl">
+    <div className="px-5 sm:px-10 pt-8 sm:pt-10 pb-10 sm:pb-12">
       <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted mb-3 sm:mb-4">
         Trip
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         {tiles.map(({ href, label, preview, Icon, tintBg, tintFg }) => (
           <Link
             key={href}
