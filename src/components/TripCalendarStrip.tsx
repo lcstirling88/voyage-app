@@ -194,7 +194,7 @@ function MonthGrid({
           const cellStyle: React.CSSProperties = {
             ...baseStyle,
             ...(isToday && todayAccent
-              ? { boxShadow: `inset 0 0 0 2px ${todayAccent}`, color: todayAccent }
+              ? { boxShadow: `inset 0 0 0 3px ${todayAccent}`, color: todayAccent }
               : {}),
           }
           const cellClass = `aspect-square rounded-md grid place-items-center text-xs transition hover:scale-105 ${
@@ -273,6 +273,6 @@ function deriveTodayAccent(bgColor: string | null, palette: PaletteSpec): string
   const firstByte = parseInt(palette.textOnColor.slice(1, 3), 16)
   const cellIsLight = !Number.isNaN(firstByte) && firstByte < 128
   return cellIsLight
-    ? `color-mix(in srgb, ${bgColor} 55%, black)`     // light cell → darker in-family tint
-    : `color-mix(in srgb, ${bgColor} 45%, white)`     // dark cell → lighter in-family tint
+    ? `color-mix(in srgb, ${bgColor} 35%, black)`     // light cell → noticeably darker in-family tint
+    : `color-mix(in srgb, ${bgColor} 70%, white)`     // dark cell → still-purple tint, not washed out
 }
