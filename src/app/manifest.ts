@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Voyage',
-    short_name: 'Voyage',
+    name: 'Itinera',
+    short_name: 'Itinera',
     description: 'Travel itineraries that build themselves.',
     start_url: '/',
     display: 'standalone',

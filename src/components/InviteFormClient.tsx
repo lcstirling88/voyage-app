@@ -38,7 +38,7 @@ export function InviteFormClient({
           ok: true,
           msg: res.emailSent
             ? `Invitation sent to ${email}.`
-            : `${email} already has a Voyage account — added them directly.`,
+            : `${email} already has an Itinera account — added them directly.`,
         })
         setEmail('')
       } else {

@@ -4,6 +4,7 @@ import { Check, X } from 'lucide-react'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { acceptInvitation } from '@/lib/actions'
+import { ItineraBrand } from '@/components/ItineraBrand'
 
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
@@ -31,7 +32,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
         <Check className="w-10 h-10 text-sage mx-auto mb-4" />
         <h1 className="h-display text-4xl">Already accepted.</h1>
         <p className="text-ink-muted mt-3">This invite has been used. Sign in to see the trip.</p>
-        <Link href="/" className="btn-ink mt-6 inline-flex">Go to Voyage</Link>
+        <Link href="/" className="btn-ink mt-6 inline-flex">Go to Itinera</Link>
       </Shell>
     )
   }
@@ -82,8 +83,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-screen grid place-items-center px-6 bg-paper">
       <div className="max-w-md text-center">
-        <div className="w-12 h-12 rounded-full bg-ink grid place-items-center mx-auto mb-6">
-          <span className="font-display text-paper-pure text-2xl leading-none">V</span>
+        <div className="flex justify-center mb-6">
+          <ItineraBrand size="md" />
         </div>
         {children}
       </div>

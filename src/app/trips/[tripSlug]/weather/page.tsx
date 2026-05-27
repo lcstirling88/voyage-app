@@ -86,7 +86,7 @@ export default async function WeatherPage({ params }: { params: Promise<{ tripSl
         </section>
 
         <section className="border border-line rounded-xl bg-paper-pure p-6">
-          <h3 className="font-display text-2xl mb-3">Voyage notes for these conditions</h3>
+          <h3 className="font-display text-2xl mb-3">Itinera notes for these conditions</h3>
           <ul className="space-y-2 text-sm">
             <li className="flex gap-3"><Umbrella className="w-4 h-4 text-ink-muted mt-0.5 shrink-0" /><span>Pack a compact umbrella — at least one wet day in each city.</span></li>
             <li className="flex gap-3"><Shirt className="w-4 h-4 text-ink-muted mt-0.5 shrink-0" /><span>Layering season. Cool mornings (12–15°C) warming to mid-20s by 2pm. Merino + light jacket.</span></li>

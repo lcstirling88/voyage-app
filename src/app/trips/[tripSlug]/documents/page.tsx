@@ -44,7 +44,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ trip
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Documents</div>
         <h1 className="h-display text-4xl sm:text-6xl mt-2">Everything in one place.</h1>
         <p className="text-ink-muted mt-3 max-w-2xl text-sm sm:text-base break-words">
-          Forward to <span className="num-mono text-ink text-xs sm:text-sm">{inboxAddress}</span> — Voyage files everything for you.
+          Forward to <span className="num-mono text-ink text-xs sm:text-sm">{inboxAddress}</span> — Itinera files everything for you.
         </p>
       </div>
 

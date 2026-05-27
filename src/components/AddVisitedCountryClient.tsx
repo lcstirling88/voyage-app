@@ -139,7 +139,7 @@ export function AddVisitedCountryClient({ options }: { options: Option[] }) {
 
       <div className="flex items-center justify-between gap-3 mt-4">
         <p className="text-xs text-ink-muted italic">
-          Counts toward your map tier even without a full Voyage trip.
+          Counts toward your map tier even without a full Itinera trip.
         </p>
         <button
           type="submit"

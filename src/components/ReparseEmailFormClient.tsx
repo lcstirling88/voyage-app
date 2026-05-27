@@ -83,7 +83,7 @@ export function ReparseEmailFormClient({ emailId }: { emailId: string }) {
 
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-ink-muted italic">
-          Voyage replays the parser over the original body plus these files. The existing booking updates in place — duplicates aren&apos;t created.
+          Itinera replays the parser over the original body plus these files. The existing booking updates in place — duplicates aren&apos;t created.
         </p>
         <button
           type="submit"

@@ -28,7 +28,7 @@ export default async function InboxPage({ params }: { params: Promise<{ tripSlug
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Inbox</div>
         <h1 className="h-display text-4xl sm:text-6xl mt-2">Forward your bookings.</h1>
         <p className="text-ink-muted mt-3 max-w-2xl text-sm sm:text-base">
-          Forward any confirmation, voucher, or itinerary email. Voyage parses, files, and updates your itinerary.
+          Forward any confirmation, voucher, or itinerary email. Itinera parses, files, and updates your itinerary.
         </p>
 
         <div className="mt-6 flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 bg-paper-pure border border-line rounded-lg max-w-full overflow-hidden">

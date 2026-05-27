@@ -200,7 +200,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
           >
             <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-sakura/20" />
             <Sparkles className="w-5 h-5 text-sakura mb-3" />
-            <h3 className="font-display text-xl">Ask Voyage</h3>
+            <h3 className="font-display text-xl">Ask Itinera</h3>
             <p className="text-sm text-paper-pure/80 mt-1">I spotted gaps in your itinerary. Let me suggest restaurants for the empty Kyoto evening.</p>
             <span className="mt-4 inline-block px-3 py-1.5 text-xs rounded-md bg-paper-pure text-ink">Open assistant</span>
           </Link>

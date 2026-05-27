@@ -123,7 +123,7 @@ export default async function ChecklistPage({ params }: { params: Promise<{ trip
 
           <section className="border border-line rounded-xl bg-sakura-soft p-5">
             <div className="flex items-center gap-2 text-wine text-xs uppercase tracking-[0.18em] mb-3">
-              <Sparkles className="w-4 h-4" /> Voyage suggests
+              <Sparkles className="w-4 h-4" /> Itinera suggests
             </div>
             <p className="text-sm">You&apos;re going to walk a lot — travellers average <strong>22,000 steps/day</strong> in Kyoto. Worth adding insoles or a second pair of shoes.</p>
           </section>

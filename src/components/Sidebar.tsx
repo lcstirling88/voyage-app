@@ -6,6 +6,7 @@ import { auth, signOut } from '@/lib/auth'
 import { SidebarNavClient } from './SidebarNavClient'
 import { TripSwitcherClient } from './TripSwitcherClient'
 import { MobileSidebarWrapper } from './MobileSidebarWrapper'
+import { ItineraBrand } from './ItineraBrand'
 
 export async function Sidebar({
   trip,
@@ -31,13 +32,11 @@ export async function Sidebar({
     <MobileSidebarWrapper>
       <aside className="w-72 lg:w-64 shrink-0 border-r border-line bg-paper-pure flex flex-col h-screen">
         <div className="p-6 border-b border-line">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-ink grid place-items-center">
-              <span className="font-display text-paper-pure text-lg leading-none">V</span>
-            </div>
+          <Link href="/" className="flex items-center gap-2.5">
+            <ItineraBrand size="sm" wordmark={false} />
             <div>
-              <div className="font-display text-xl leading-none">Voyage</div>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted mt-0.5">Travel, considered.</div>
+              <div className="font-display text-xl leading-none">Itinera</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted mt-0.5">The art of the journey.</div>
             </div>
           </Link>
         </div>

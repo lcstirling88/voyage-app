@@ -197,7 +197,7 @@ function AISection({
           <h2 className="font-display text-2xl">Ask AI for ideas</h2>
         </div>
         <p className="text-sm text-paper-pure/70 mb-5">
-          Voyage knows your trip context. Just say what you&apos;re after.
+          Itinera knows your trip context. Just say what you&apos;re after.
         </p>
 
         <form onSubmit={ask} className="space-y-3">

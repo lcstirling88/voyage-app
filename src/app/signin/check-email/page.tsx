@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Mail } from 'lucide-react'
 
-export const metadata = { title: 'Check your email · Voyage' }
+export const metadata = { title: 'Check your email · Itinera' }
 
 export default function CheckEmailPage() {
   return (

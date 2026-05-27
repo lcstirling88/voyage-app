@@ -3,7 +3,7 @@ import Resend from 'next-auth/providers/resend'
 import { PrismaAdapter } from '@auth/prisma-adapter'
 import { prisma } from './db'
 
-const fromEmail = process.env.AUTH_RESEND_FROM ?? 'Voyage <onboarding@resend.dev>'
+const fromEmail = process.env.AUTH_RESEND_FROM ?? 'Itinera <onboarding@resend.dev>'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -26,8 +26,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     authorized({ auth, request }) {
       const path = request.nextUrl.pathname
       const isAuthed = !!auth?.user
-      // Public routes
-      if (path === '/' || path.startsWith('/signin') || path.startsWith('/api/auth') || path.startsWith('/api/email/inbound')) {
+      // Public routes — landing, sign-in flow, inspiration browse, webhooks.
+      if (
+        path === '/' ||
+        path.startsWith('/signin') ||
+        path.startsWith('/api/auth') ||
+        path.startsWith('/api/email/inbound') ||
+        path.startsWith('/inspiration')
+      ) {
         return true
       }
       // Everything else under /trips needs a session

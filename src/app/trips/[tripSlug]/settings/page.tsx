@@ -49,7 +49,7 @@ export default async function TripSettingsPage({ params }: { params: Promise<{ t
         {/* Inbox address (just informational here too) */}
         <section>
           <h2 className="font-display text-2xl mb-3">Inbox address</h2>
-          <p className="text-sm text-ink-muted mb-3">Forward booking emails here and Voyage files them onto this trip.</p>
+          <p className="text-sm text-ink-muted mb-3">Forward booking emails here and Itinera files them onto this trip.</p>
           <code className="num-mono text-sm bg-paper-pure border border-line rounded px-3 py-2 inline-block">
             {inboxAddress}
           </code>

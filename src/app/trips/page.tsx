@@ -22,7 +22,7 @@ export default async function TripsListPage() {
     <main className="min-h-screen px-6 sm:px-10 py-10 sm:py-16 max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-4">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Voyage</div>
+          <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Itinera</div>
           <h1 className="h-display text-4xl sm:text-6xl mt-2">Your trips.</h1>
           <p className="text-ink-muted mt-3 max-w-xl text-sm sm:text-base">Every flight, hotel, activity and document — gathered, parsed, and ready.</p>
         </div>

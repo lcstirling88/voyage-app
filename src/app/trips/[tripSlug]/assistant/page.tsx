@@ -34,7 +34,7 @@ export default async function AssistantPage({ params }: { params: Promise<{ trip
   return (
     <>
       <div className="hero-light border-b border-line px-10 py-10">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Voyage assistant</div>
+        <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Itinera assistant</div>
         <h1 className="h-display text-6xl mt-2">Fill the gaps.</h1>
         <p className="text-ink-muted mt-3 max-w-xl">
           I&apos;ve read your whole itinerary. Ask me anything — or take a suggestion.
@@ -122,7 +122,7 @@ export default async function AssistantPage({ params }: { params: Promise<{ trip
 
           <div className="border-t border-line p-4 flex items-center gap-3">
             <button className="text-ink-muted hover:text-ink"><Paperclip className="w-4 h-4" /></button>
-            <input type="text" placeholder="Ask Voyage anything about this trip…" className="flex-1 bg-transparent outline-none text-sm placeholder:text-ink-muted" />
+            <input type="text" placeholder="Ask Itinera anything about this trip…" className="flex-1 bg-transparent outline-none text-sm placeholder:text-ink-muted" />
             <span className="text-[10px] text-ink-muted num-mono hidden md:inline">⌘ K</span>
             <button className="w-9 h-9 rounded-full bg-ink text-paper-pure grid place-items-center"><ArrowUp className="w-4 h-4" /></button>
           </div>

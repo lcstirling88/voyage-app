@@ -22,12 +22,12 @@ const jetbrains = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Voyage — travel, considered',
-  description: 'Travel itineraries that build themselves. Forward a booking email; Voyage files it.',
-  applicationName: 'Voyage',
+  title: 'Itinera — the art of the journey',
+  description: 'Travel itineraries that build themselves. Forward a booking email; Itinera files it.',
+  applicationName: 'Itinera',
   appleWebApp: {
     capable: true,
-    title: 'Voyage',
+    title: 'Itinera',
     statusBarStyle: 'black-translucent',
   },
   formatDetection: { telephone: false },

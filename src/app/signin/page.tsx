@@ -1,15 +1,16 @@
 import { signIn } from '@/lib/auth'
 import { Mail } from 'lucide-react'
+import { ItineraBrand } from '@/components/ItineraBrand'
 
-export const metadata = { title: 'Sign in · Voyage' }
+export const metadata = { title: 'Sign in · Itinera' }
 
 export default function SignInPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   return (
     <main className="min-h-screen grid place-items-center bg-paper px-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <div className="w-12 h-12 rounded-full bg-ink grid place-items-center mx-auto mb-4">
-            <span className="font-display text-paper-pure text-2xl leading-none">V</span>
+          <div className="flex justify-center mb-5">
+            <ItineraBrand size="md" />
           </div>
           <h1 className="h-display text-5xl">Sign in.</h1>
           <p className="text-ink-muted text-sm mt-2">
