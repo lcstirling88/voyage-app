@@ -35,6 +35,18 @@ export type DestinationProfile = {
   /** Iconic hero image used at the top of the itinerary page. Optional —
    *  destinations without a curated image fall back to a plain gradient. */
   heroImage?: DestinationHeroImage
+  /**
+   * ISO 3166-1 numeric country code as a string (e.g. "554" for New Zealand,
+   * "392" for Japan). Matches the `id` field in the world-atlas TopoJSON so
+   * we can highlight the country on the Atlas map.
+   */
+  isoNumeric?: string
+  /**
+   * Cute emoji sticker representing something iconic about the country —
+   * shown on the Atlas country card. e.g. "🗻" (Fuji) for Japan,
+   * "🦘" for Australia, "🌮" for Mexico.
+   */
+  passportIcon?: string
 }
 
 // Build an Unsplash CDN URL for a given photo id with sensible sizing/quality
@@ -44,42 +56,61 @@ const unsplash = (id: string) =>
 
 const PROFILES: DestinationProfile[] = [
   { matchers: [/japan/i, /日本/], timezone: 'Asia/Tokyo', currency: 'JPY', label: 'Japan',
+    isoNumeric: '392', passportIcon: '🗻',
     heroImage: {
       src: unsplash('photo-1493976040374-85c8e12f0c0e'),
       alt: 'Mount Fuji at dawn with cherry blossoms',
       credit: 'Unsplash',
-      // Bias slightly toward the upper-mid to keep Fuji's peak in frame
       objectPosition: '50% 35%',
     } },
   { matchers: [/new\s*zealand/i, /\baotearoa\b/i, /\bnz\b/i], timezone: 'Pacific/Auckland', currency: 'NZD', label: 'New Zealand',
+    isoNumeric: '554', passportIcon: '🥝',
     heroImage: {
       src: unsplash('photo-1469521669194-babb45599def'),
       alt: 'Lake Wakatipu and the Remarkables, Queenstown',
       credit: 'Unsplash',
-      // The sky takes the top ~40% of this photo; bias the visible band low
-      // so mountains + lake dominate the hero on short / cropped containers.
       objectPosition: '50% 70%',
     } },
-  { matchers: [/australia/i, /\bau\b/i], timezone: 'Australia/Sydney', currency: 'AUD', label: 'Australia' },
-  { matchers: [/italy/i, /italia/i], timezone: 'Europe/Rome', currency: 'EUR', label: 'Italy' },
-  { matchers: [/iceland/i, /ísland/i], timezone: 'Atlantic/Reykjavik', currency: 'ISK', label: 'Iceland' },
-  { matchers: [/thailand/i, /siam/i], timezone: 'Asia/Bangkok', currency: 'THB', label: 'Thailand' },
-  { matchers: [/france/i], timezone: 'Europe/Paris', currency: 'EUR', label: 'France' },
-  { matchers: [/spain/i, /españa/i], timezone: 'Europe/Madrid', currency: 'EUR', label: 'Spain' },
-  { matchers: [/germany/i, /deutschland/i], timezone: 'Europe/Berlin', currency: 'EUR', label: 'Germany' },
-  { matchers: [/portugal/i], timezone: 'Europe/Lisbon', currency: 'EUR', label: 'Portugal' },
-  { matchers: [/united\s*kingdom/i, /\buk\b/i, /england/i, /scotland/i, /wales/i], timezone: 'Europe/London', currency: 'GBP', label: 'United Kingdom' },
-  { matchers: [/ireland/i, /éire/i], timezone: 'Europe/Dublin', currency: 'EUR', label: 'Ireland' },
-  { matchers: [/united\s*states/i, /\busa\b/i, /\bus\b/i, /america/i], timezone: 'America/New_York', currency: 'USD', label: 'United States' },
-  { matchers: [/canada/i], timezone: 'America/Toronto', currency: 'CAD', label: 'Canada' },
-  { matchers: [/mexico/i, /méxico/i], timezone: 'America/Mexico_City', currency: 'MXN', label: 'Mexico' },
-  { matchers: [/singapore/i], timezone: 'Asia/Singapore', currency: 'SGD', label: 'Singapore' },
-  { matchers: [/indonesia/i, /bali/i], timezone: 'Asia/Jakarta', currency: 'IDR', label: 'Indonesia' },
-  { matchers: [/vietnam/i], timezone: 'Asia/Ho_Chi_Minh', currency: 'VND', label: 'Vietnam' },
-  { matchers: [/south\s*korea/i, /\bkorea\b/i], timezone: 'Asia/Seoul', currency: 'KRW', label: 'South Korea' },
-  { matchers: [/china/i, /中国/i], timezone: 'Asia/Shanghai', currency: 'CNY', label: 'China' },
-  { matchers: [/hong\s*kong/i], timezone: 'Asia/Hong_Kong', currency: 'HKD', label: 'Hong Kong' },
-  { matchers: [/india/i], timezone: 'Asia/Kolkata', currency: 'INR', label: 'India' },
+  { matchers: [/australia/i, /\bau\b/i], timezone: 'Australia/Sydney', currency: 'AUD', label: 'Australia',
+    isoNumeric: '036', passportIcon: '🦘' },
+  { matchers: [/italy/i, /italia/i], timezone: 'Europe/Rome', currency: 'EUR', label: 'Italy',
+    isoNumeric: '380', passportIcon: '🍝' },
+  { matchers: [/iceland/i, /ísland/i], timezone: 'Atlantic/Reykjavik', currency: 'ISK', label: 'Iceland',
+    isoNumeric: '352', passportIcon: '🌋' },
+  { matchers: [/thailand/i, /siam/i], timezone: 'Asia/Bangkok', currency: 'THB', label: 'Thailand',
+    isoNumeric: '764', passportIcon: '🐘' },
+  { matchers: [/france/i], timezone: 'Europe/Paris', currency: 'EUR', label: 'France',
+    isoNumeric: '250', passportIcon: '🥐' },
+  { matchers: [/spain/i, /españa/i], timezone: 'Europe/Madrid', currency: 'EUR', label: 'Spain',
+    isoNumeric: '724', passportIcon: '💃' },
+  { matchers: [/germany/i, /deutschland/i], timezone: 'Europe/Berlin', currency: 'EUR', label: 'Germany',
+    isoNumeric: '276', passportIcon: '🥨' },
+  { matchers: [/portugal/i], timezone: 'Europe/Lisbon', currency: 'EUR', label: 'Portugal',
+    isoNumeric: '620', passportIcon: '🐟' },
+  { matchers: [/united\s*kingdom/i, /\buk\b/i, /england/i, /scotland/i, /wales/i], timezone: 'Europe/London', currency: 'GBP', label: 'United Kingdom',
+    isoNumeric: '826', passportIcon: '🎡' },
+  { matchers: [/ireland/i, /éire/i], timezone: 'Europe/Dublin', currency: 'EUR', label: 'Ireland',
+    isoNumeric: '372', passportIcon: '🍀' },
+  { matchers: [/united\s*states/i, /\busa\b/i, /\bus\b/i, /america/i], timezone: 'America/New_York', currency: 'USD', label: 'United States',
+    isoNumeric: '840', passportIcon: '🗽' },
+  { matchers: [/canada/i], timezone: 'America/Toronto', currency: 'CAD', label: 'Canada',
+    isoNumeric: '124', passportIcon: '🍁' },
+  { matchers: [/mexico/i, /méxico/i], timezone: 'America/Mexico_City', currency: 'MXN', label: 'Mexico',
+    isoNumeric: '484', passportIcon: '🌮' },
+  { matchers: [/singapore/i], timezone: 'Asia/Singapore', currency: 'SGD', label: 'Singapore',
+    isoNumeric: '702', passportIcon: '🏙️' },
+  { matchers: [/indonesia/i, /bali/i], timezone: 'Asia/Jakarta', currency: 'IDR', label: 'Indonesia',
+    isoNumeric: '360', passportIcon: '🏝️' },
+  { matchers: [/vietnam/i], timezone: 'Asia/Ho_Chi_Minh', currency: 'VND', label: 'Vietnam',
+    isoNumeric: '704', passportIcon: '🍜' },
+  { matchers: [/south\s*korea/i, /\bkorea\b/i], timezone: 'Asia/Seoul', currency: 'KRW', label: 'South Korea',
+    isoNumeric: '410', passportIcon: '🥢' },
+  { matchers: [/china/i, /中国/i], timezone: 'Asia/Shanghai', currency: 'CNY', label: 'China',
+    isoNumeric: '156', passportIcon: '🐼' },
+  { matchers: [/hong\s*kong/i], timezone: 'Asia/Hong_Kong', currency: 'HKD', label: 'Hong Kong',
+    isoNumeric: '344', passportIcon: '🏙️' },
+  { matchers: [/india/i], timezone: 'Asia/Kolkata', currency: 'INR', label: 'India',
+    isoNumeric: '356', passportIcon: '🕌' },
 ]
 
 const FALLBACK: Omit<DestinationProfile, 'matchers'> = {
@@ -92,7 +123,14 @@ export function profileForDestination(destination: string | null | undefined): O
   if (!destination) return FALLBACK
   for (const p of PROFILES) {
     if (p.matchers.some((r) => r.test(destination))) {
-      return { timezone: p.timezone, currency: p.currency, label: p.label, heroImage: p.heroImage }
+      return {
+        timezone: p.timezone,
+        currency: p.currency,
+        label: p.label,
+        heroImage: p.heroImage,
+        isoNumeric: p.isoNumeric,
+        passportIcon: p.passportIcon,
+      }
     }
   }
   return FALLBACK

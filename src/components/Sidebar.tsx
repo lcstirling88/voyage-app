@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Settings, LogOut } from 'lucide-react'
+import { LogOut, Globe } from 'lucide-react'
 import type { Trip } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { auth, signOut } from '@/lib/auth'
@@ -45,6 +45,12 @@ export async function Sidebar({
         <div className="p-4 border-b border-line">
           <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted mb-2 px-2">Current trip</div>
           <TripSwitcherClient currentSlug={trip.slug} trips={allTrips} />
+          <Link
+            href="/atlas"
+            className="mt-3 mx-2 inline-flex items-center gap-2 text-xs text-ink-muted hover:text-ink ulink"
+          >
+            <Globe className="w-3.5 h-3.5" /> Open Atlas
+          </Link>
         </div>
 
         <SidebarNavClient tripSlug={trip.slug} emailCount={emailCount} />

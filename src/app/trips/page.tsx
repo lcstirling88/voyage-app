@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { Plus, Globe } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { requireUser } from '@/lib/session'
 import { fmtDateRange, daysUntil } from '@/lib/format'
@@ -27,7 +27,13 @@ export default async function TripsListPage() {
           <p className="text-ink-muted mt-3 max-w-xl text-sm sm:text-base">Every flight, hotel, activity and document — gathered, parsed, and ready.</p>
         </div>
         <div className="text-left sm:text-right">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Signed in as</div>
+          <Link
+            href="/atlas"
+            className="inline-flex items-center gap-1.5 text-xs ulink text-ink-muted hover:text-ink"
+          >
+            <Globe className="w-3.5 h-3.5" /> Atlas
+          </Link>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted mt-3">Signed in as</div>
           <div className="text-sm text-ink truncate max-w-[240px]">{user.email}</div>
           <form action={async () => { 'use server'; const { signOut } = await import('@/lib/auth'); await signOut({ redirectTo: '/signin' }) }}>
             <button className="text-xs text-ink-muted ulink mt-1">Sign out</button>
