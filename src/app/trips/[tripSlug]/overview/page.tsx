@@ -94,14 +94,12 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
             <div className="sm:border-l sm:border-paper-pure/20 sm:pl-8">
               <div className="text-[10px] uppercase tracking-[0.2em] text-paper-pure/60">Returning</div>
               <div className="font-display text-xl sm:text-2xl mt-1">{fmtDate(trip.endDate, 'MMM d, yyyy')}</div>
-              <div className="text-xs text-paper-pure/70 mt-0.5 truncate max-w-[180px]">{trip.travelerNames}</div>
             </div>
             <div className="sm:border-l sm:border-paper-pure/20 sm:pl-8">
               <div className="text-[10px] uppercase tracking-[0.2em] text-paper-pure/60">Countdown</div>
               <div className="font-display text-xl sm:text-2xl mt-1 num-mono">
                 <CountdownClient to={trip.startDate.toISOString()} /> days
               </div>
-              <div className="text-xs text-paper-pure/70 mt-0.5">{paidPct}% paid</div>
             </div>
           </div>
         </div>
