@@ -54,8 +54,10 @@ export default async function ProfilePage() {
         <div className="w-12" />
       </header>
 
-      {/* ---------- HERO: framed atlas, wider than the rest of the page ---------- */}
-      <div className="max-w-5xl mx-auto px-3 sm:px-8 pt-6 sm:pt-10">
+      {/* ---------- HERO: framed atlas. Sized to match the supporting detail
+           column below — feels more like a single composed page than a wide
+           artifact + a narrow column under it. ---------- */}
+      <div className="max-w-3xl mx-auto px-3 sm:px-8 pt-6 sm:pt-10">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted text-center mb-4 sm:mb-5">
           My passport
         </div>

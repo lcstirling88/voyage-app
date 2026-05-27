@@ -71,8 +71,10 @@ export function tierForDays(days: number): AtlasTierSpec {
 
 /** Fill used for a country whose only trips are still upcoming (hatched pattern). */
 export const UPCOMING_ONLY_FILL = 'url(#hatch-upcoming)'
-/** Fill used for countries the user has no trips in. */
-export const UNVISITED_FILL = '#E8E2D4'
+/** Fill used for countries the user has no trips in. Two shades darker than
+ *  the original very-pale beige so unvisited land reads clearly as land
+ *  (not as ocean) and the visited sage tiers pop a little harder. */
+export const UNVISITED_FILL = '#B8B0A0'
 /** Gold border colour for the Lived tier — matches --color-gold in globals.css. */
 export const LIVED_EDGE_COLOR = '#A8814B'
 
