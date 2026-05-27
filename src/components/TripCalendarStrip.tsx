@@ -35,7 +35,9 @@ export function TripCalendarStrip({
   /** Date treated as "today" for the highlight ring. Defaults to current time. */
   today?: Date
 }) {
-  const todayDay = startOfDay(today ?? new Date())
+  // Compare via formatted date strings (YYYY-MM-DD) so TZ differences between
+  // the Vercel runtime and the user's locale can't desync today's highlight.
+  const todayKey = format(today ?? new Date(), 'yyyy-MM-dd')
   // Every month that overlaps the trip range
   const months = eachMonthOfInterval({
     start: startOfMonth(startDate),
@@ -87,7 +89,7 @@ export function TripCalendarStrip({
                   cityOrder={cityOrder}
                   palette={palette}
                   tripSlug={tripSlug}
-                  today={todayDay}
+                  todayKey={todayKey}
                 />
               </div>
             ))}
@@ -101,7 +103,7 @@ export function TripCalendarStrip({
             cityOrder={cityOrder}
             palette={palette}
             tripSlug={tripSlug}
-            today={todayDay}
+            todayKey={todayKey}
           />
         )}
 
@@ -114,7 +116,7 @@ export function TripCalendarStrip({
 }
 
 function MonthGrid({
-  monthStart, tripStart, tripEnd, daysByDate, cityOrder, palette, tripSlug, today,
+  monthStart, tripStart, tripEnd, daysByDate, cityOrder, palette, tripSlug, todayKey,
 }: {
   monthStart: Date
   tripStart: Date
@@ -123,7 +125,7 @@ function MonthGrid({
   cityOrder: string[]
   palette: PaletteSpec
   tripSlug: string
-  today: Date
+  todayKey: string
 }) {
   const monthEnd = endOfMonth(monthStart)
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd })
@@ -177,24 +179,27 @@ function MonthGrid({
             )
           }
 
-          const isToday = day.getTime() === today.getTime()
-          // For today's cell, draw a 2px ring outside the cell using box-shadow
-          // in the palette's contrast colour (palette.textOnColor — dark for the
-          // pastel palette, light for jewel / mono). Sits cleanly inside the 4px
-          // grid gap so it doesn't clip the neighbours.
+          const isToday = dateKey === todayKey
+          // For today's cell, draw a thick ring outside the cell using box-shadow
+          // in the palette's contrast colour. Three layers:
+          //   1) bg fill (if any) from baseStyle
+          //   2) a 2px gap of paper-pure (so the ring visually separates from
+          //      the city colour)
+          //   3) a 3px ring in palette.textOnColor as the actual outline
+          // Result: today reads as a clearly outlined chip regardless of palette.
           const baseStyle: React.CSSProperties = bgColor
             ? { background: bgColor, color: palette.textOnColor }
             : {}
-          const todayBoxShadow = isToday
-            ? `0 0 0 2px ${palette.textOnColor}`
+          const todayShadow = isToday
+            ? `0 0 0 2px var(--color-paper-pure, #FBF8F1), 0 0 0 5px ${palette.textOnColor}`
             : undefined
           const cellStyle: React.CSSProperties = {
             ...baseStyle,
-            ...(todayBoxShadow ? { boxShadow: todayBoxShadow } : {}),
+            ...(todayShadow ? { boxShadow: todayShadow } : {}),
           }
-          const cellClass = `aspect-square rounded-md grid place-items-center text-xs font-medium transition hover:scale-105 hover:shadow ${
+          const cellClass = `aspect-square rounded-md grid place-items-center text-xs transition hover:scale-105 ${
             bgColor ? '' : 'bg-line-soft text-ink-soft'
-          } ${isToday ? 'font-bold' : ''}`
+          } ${isToday ? 'font-bold' : 'font-medium'}`
 
           return (
             <a
