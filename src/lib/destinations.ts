@@ -14,6 +14,13 @@ export type DestinationHeroImage = {
   alt: string
   /** Photographer attribution, shown discreetly in the corner. */
   credit?: string
+  /**
+   * CSS object-position value for the hero crop. Lets each photo land its
+   * subject in the visible band regardless of how short the hero is on a
+   * given device. Examples: 'center', '50% 65%' (biased low), '50% 30%' (biased high).
+   * Default: 'center'.
+   */
+  objectPosition?: string
 }
 
 export type DestinationProfile = {
@@ -37,9 +44,22 @@ const unsplash = (id: string) =>
 
 const PROFILES: DestinationProfile[] = [
   { matchers: [/japan/i, /日本/], timezone: 'Asia/Tokyo', currency: 'JPY', label: 'Japan',
-    heroImage: { src: unsplash('photo-1493976040374-85c8e12f0c0e'), alt: 'Mount Fuji at dawn with cherry blossoms', credit: 'Unsplash' } },
+    heroImage: {
+      src: unsplash('photo-1493976040374-85c8e12f0c0e'),
+      alt: 'Mount Fuji at dawn with cherry blossoms',
+      credit: 'Unsplash',
+      // Bias slightly toward the upper-mid to keep Fuji's peak in frame
+      objectPosition: '50% 35%',
+    } },
   { matchers: [/new\s*zealand/i, /\baotearoa\b/i, /\bnz\b/i], timezone: 'Pacific/Auckland', currency: 'NZD', label: 'New Zealand',
-    heroImage: { src: unsplash('photo-1469521669194-babb45599def'), alt: 'Lake Wakatipu and the Remarkables, Queenstown', credit: 'Unsplash' } },
+    heroImage: {
+      src: unsplash('photo-1469521669194-babb45599def'),
+      alt: 'Lake Wakatipu and the Remarkables, Queenstown',
+      credit: 'Unsplash',
+      // The sky takes the top ~40% of this photo; bias the visible band low
+      // so mountains + lake dominate the hero on short / cropped containers.
+      objectPosition: '50% 70%',
+    } },
   { matchers: [/australia/i, /\bau\b/i], timezone: 'Australia/Sydney', currency: 'AUD', label: 'Australia' },
   { matchers: [/italy/i, /italia/i], timezone: 'Europe/Rome', currency: 'EUR', label: 'Italy' },
   { matchers: [/iceland/i, /ísland/i], timezone: 'Atlantic/Reykjavik', currency: 'ISK', label: 'Iceland' },

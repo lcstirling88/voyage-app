@@ -101,12 +101,13 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
   return (
     <>
       {heroImage ? (
-        <div className="relative h-[32vh] min-h-[220px] sm:h-[42vh] sm:min-h-[320px] lg:min-h-[380px] bg-ink overflow-hidden">
+        <div className="relative h-[38vh] min-h-[260px] sm:h-[46vh] sm:min-h-[360px] lg:min-h-[420px] bg-ink overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element -- external CDN image, next/image needs domain config */}
           <img
             src={heroImage.src}
             alt={heroImage.alt}
             className="absolute inset-0 w-full h-full object-cover"
+            style={{ objectPosition: heroImage.objectPosition ?? 'center' }}
           />
           {/* Dark gradient at the bottom so the title stays legible regardless of photo */}
           <div className="absolute inset-0 bg-gradient-to-b from-ink/10 via-transparent to-ink/70" />
