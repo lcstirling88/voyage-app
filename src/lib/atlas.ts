@@ -9,12 +9,12 @@
  * we'd swap to countries-50m.json.
  */
 
-// Equal Earth (Šavrič et al, 2018) — modern equal-area projection with a
-// softer curved silhouette and minimal polar stretching. The default
-// projection used by Wikipedia's world maps and a lot of contemporary atlases;
-// reads more "polished" than Winkel Tripel without the heavy distortion of
-// Mercator at the poles.
-import { geoPath, geoEqualEarth } from 'd3-geo'
+// Patterson Cylindrical — a modern projection (Patterson, Šavrič, Jenny, 2014)
+// designed specifically to give a flat, rectangular "wall-map" silhouette
+// (straight east-west, gently tapered north-south) without Mercator's brutal
+// polar distortion. Reads as a flat printed atlas page, no globe-warping.
+import { geoPath } from 'd3-geo'
+import { geoPatterson } from 'd3-geo-projection'
 import { feature } from 'topojson-client'
 import type { GeometryCollection, Topology } from 'topojson-specification'
 import worldAtlas from 'world-atlas/countries-110m.json'
@@ -227,7 +227,7 @@ export const COUNTRY_PATHS: Array<{ id: string; d: string; name: string }> = (()
   const topology = worldAtlas as unknown as Topology<{ countries: GeometryCollection }>
   const collection = feature(topology, topology.objects.countries) as unknown as FeatureCollection<Geometry, CountryProps>
 
-  const projection = geoEqualEarth()
+  const projection = geoPatterson()
   projection.fitExtent(
     [[8, 8], [ATLAS_VIEW_WIDTH - 8, ATLAS_VIEW_HEIGHT - 8]],
     collection,
