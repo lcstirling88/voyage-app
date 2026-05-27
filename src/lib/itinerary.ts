@@ -196,12 +196,25 @@ export function cleanHotelName(title: string): string {
 }
 
 /**
- * Extract a sensible city label for a booking. Prefers booking.location; falls
- * back to a heuristic on booking.address (second-to-last comma-separated chunk,
- * with postcodes stripped). Returns null if nothing usable found.
+ * Extract a sensible city label for a booking. Always returns the city only —
+ * country, region, and street suffixes are stripped.
+ *
+ *   "Wanaka"                                  → "Wanaka"
+ *   "Wanaka, New Zealand"                     → "Wanaka"
+ *   "Lake Tekapo, Canterbury, New Zealand"    → "Lake Tekapo"
+ *   address: "1 Cathedral Sq, Christchurch 8011, New Zealand" → "Christchurch"
+ *
+ * Strategy:
+ *  - If location is set, take its first comma-separated segment (the city).
+ *  - Else parse address: drop postcodes from each segment, then take the
+ *    second-to-last segment if there are at least two (typical
+ *    street/city/country format), otherwise the first.
  */
 export function cityForBooking(b: Pick<Booking, 'location' | 'address'>): string | null {
-  if (b.location && b.location.trim()) return b.location.trim()
+  if (b.location && b.location.trim()) {
+    const first = b.location.split(',')[0]?.trim()
+    if (first) return first
+  }
   if (!b.address) return null
   const parts = b.address
     .split(',')
