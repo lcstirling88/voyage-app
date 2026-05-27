@@ -22,8 +22,10 @@ export type AtlasCountrySummary = {
   label: string
   /** Cute emoji shown on the country card. */
   passportIcon: string | null
-  /** Total nights/days across all trips to this country. */
+  /** Total nights/days across all trips to this country (completed + upcoming). */
   totalDays: number
+  /** Days from trips that have already ended — the basis for the tier rank. */
+  completedDays: number
   /** Number of trips to this country. */
   tripCount: number
   /** True if at least one trip has already ended (today > endDate). */
@@ -31,8 +33,43 @@ export type AtlasCountrySummary = {
   /** True if at least one trip is still upcoming (today < startDate or in-progress). */
   hasUpcoming: boolean
   /** Trip rows for the card body. */
-  trips: { slug: string; name: string; startDate: Date; endDate: Date; days: number }[]
+  trips: { slug: string; name: string; startDate: Date; endDate: Date; days: number; completed: boolean }[]
 }
+
+// ---------------------------------------------------------------------------
+// Tier ranking — rewards depth of visit. Only completed trips count toward
+// tier (upcoming trips paint the country but don't yet earn the badge).
+
+export type AtlasTier = 'touchdown' | 'visited' | 'explored' | 'lived'
+
+export type AtlasTierSpec = {
+  tier: AtlasTier
+  label: string
+  stars: number       // 1-4, shown on the card
+  mapFill: string     // base sage fill on the world map
+  isLived: boolean    // gates the gold edge + crown stamp
+}
+
+const TIERS: Record<AtlasTier, AtlasTierSpec> = {
+  touchdown: { tier: 'touchdown', label: 'Touchdown', stars: 1, mapFill: '#C8D4CC', isLived: false },
+  visited:   { tier: 'visited',   label: 'Visited',   stars: 2, mapFill: '#7A9387', isLived: false },
+  explored:  { tier: 'explored',  label: 'Explored',  stars: 3, mapFill: '#3F5B4E', isLived: false },
+  lived:     { tier: 'lived',     label: 'Lived',     stars: 4, mapFill: '#243730', isLived: true },
+}
+
+export function tierForDays(days: number): AtlasTierSpec {
+  if (days >= 31) return TIERS.lived
+  if (days >= 15) return TIERS.explored
+  if (days >= 4) return TIERS.visited
+  return TIERS.touchdown
+}
+
+/** Fill used for a country whose only trips are still upcoming (hatched pattern). */
+export const UPCOMING_ONLY_FILL = 'url(#hatch-upcoming)'
+/** Fill used for countries the user has no trips in. */
+export const UNVISITED_FILL = '#E8E2D4'
+/** Gold border colour for the Lived tier — matches --color-gold in globals.css. */
+export const LIVED_EDGE_COLOR = '#A8814B'
 
 /** Map's intrinsic projection viewbox dimensions. Used by both the SVG and the page layout. */
 export const ATLAS_VIEW_WIDTH = 980
