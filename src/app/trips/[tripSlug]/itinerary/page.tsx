@@ -93,9 +93,9 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
     })
   }
 
-  // TEMPORARY: hardcoded so the user can verify the "today" ring on the
-  // calendar before the trip starts. Revert to `new Date()` after sign-off.
-  const today = new Date('2026-06-26T12:00:00Z')
+  // Highlights today's cell in the calendar strip. Will only have a visible
+  // effect once today falls inside the trip's date range.
+  const today = new Date()
 
   // Iconic destination photo + country label for the hero. Falls back to the
   // existing gradient header for destinations we don't have a curated image for.
