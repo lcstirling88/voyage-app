@@ -21,6 +21,11 @@ model User {
   image         String?
   createdAt     DateTime  @default(now())
 
+  // ISO 3166-1 numeric code of the user's country of residence. Paints
+  // that country in burgundy with a gold edge on the Atlas map, and
+  // separates it from travel destinations in the country list + stats.
+  homeCountryIso String?
+
   accounts         Account[]
   sessions         Session[]
   memberships      Membership[]

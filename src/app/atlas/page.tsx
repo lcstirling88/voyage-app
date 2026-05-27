@@ -8,11 +8,11 @@
 
 import Link from 'next/link'
 import { startOfDay, format } from 'date-fns'
-import { Globe, Sparkles, Crown, Maximize2, MapPin } from 'lucide-react'
+import { Globe, Sparkles, Crown, Maximize2, MapPin, Home } from 'lucide-react'
 import { requireUser } from '@/lib/session'
 import {
   loadAtlasForUser, renderHintsFromCountries, tierForDays,
-  LIVED_EDGE_COLOR,
+  LIVED_EDGE_COLOR, HOME_FILL,
   type AtlasCountrySummary, type AtlasManualVisit,
 } from '@/lib/atlas'
 import { listDestinations } from '@/lib/destinations'
@@ -31,8 +31,11 @@ function twemojiUrl(emoji: string): string {
 
 export default async function AtlasPage() {
   const user = await requireUser()
-  const { countries, totalDays, totalTrips, manualByIso } = await loadAtlasForUser(user.id)
-  const renderHints = renderHintsFromCountries(countries)
+  const {
+    countries, homeCountry, homeCountryIso,
+    totalDays, totalTrips, manualByIso,
+  } = await loadAtlasForUser(user.id)
+  const renderHints = renderHintsFromCountries(countries, homeCountryIso)
   const totalCountries = countries.length
   const destinationOptions = listDestinations().map((d) => ({
     isoNumeric: d.isoNumeric!,
@@ -79,8 +82,11 @@ export default async function AtlasPage() {
             <span className="hidden sm:inline">Full view</span>
           </Link>
 
-          {totalCountries > 0 && (
+          {(totalCountries > 0 || homeCountry) && (
             <div className="mt-3 sm:mt-4 px-3 sm:px-0 flex items-center justify-center gap-3 sm:gap-5 text-[9px] sm:text-[10px] uppercase tracking-[0.18em] text-ink-muted flex-wrap">
+              {homeCountry && (
+                <LegendSwatch color={HOME_FILL} label="Home" border={LIVED_EDGE_COLOR} />
+              )}
               <LegendSwatch color="#C8D4CC" label="★ Touchdown" />
               <LegendSwatch color="#7A9387" label="★★ Visited" />
               <LegendSwatch color="#3F5B4E" label="★★★ Explored" />
@@ -95,7 +101,9 @@ export default async function AtlasPage() {
       </section>
 
       <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-3xl space-y-4">
-        {countries.length === 0 && (
+        {homeCountry && <HomeCard country={homeCountry} />}
+
+        {countries.length === 0 && !homeCountry && (
           <div className="border border-line rounded-xl bg-paper-pure p-8 sm:p-10 text-center">
             <Sparkles className="w-6 h-6 text-sage mx-auto mb-3" />
             <h2 className="font-display text-2xl mb-2">An empty map is a beginning.</h2>
@@ -142,6 +150,81 @@ function LegendSwatch({
       />
       {label}
     </span>
+  )
+}
+
+/**
+ * Burgundy-tinted "Home" card. Pinned to the top of the country list when
+ * the user has set a country of residence. Visually echoes the burgundy
+ * paint on the map. Shows any domestic trips for context, but doesn't
+ * award a tier — home is its own thing, not a travel achievement.
+ */
+function HomeCard({ country }: { country: AtlasCountrySummary }) {
+  return (
+    <div
+      className="rounded-xl p-4 sm:p-5 flex items-start gap-4"
+      style={{
+        background: 'linear-gradient(135deg, rgba(107, 39, 55, 0.06), rgba(107, 39, 55, 0.02))',
+        border: `1px solid ${HOME_FILL}33`,
+      }}
+    >
+      <div
+        className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg shrink-0 grid place-items-center overflow-hidden"
+        style={{ background: HOME_FILL }}
+      >
+        {country.passportIcon ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={`https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/svg/${[...country.passportIcon].map((c) => c.codePointAt(0)!).filter((cp) => cp !== 0xFE0F).map((cp) => cp.toString(16)).join('-')}.svg`}
+            alt={country.label}
+            className="w-10 h-10 sm:w-12 sm:h-12"
+          />
+        ) : (
+          <Home className="w-8 h-8 text-paper-pure" />
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <h2 className="font-display text-xl sm:text-2xl">{country.label}</h2>
+          <span
+            className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.18em] px-2 py-0.5 rounded-md text-paper-pure"
+            style={{ background: HOME_FILL }}
+          >
+            <Home className="w-3 h-3" />
+            Home
+          </span>
+        </div>
+
+        <p className="text-xs text-ink-muted italic mt-1">
+          Where you live — kept distinct from your travel tiers.
+        </p>
+
+        {country.trips.length > 0 && (
+          <div className="mt-3 space-y-1">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+              Trips at home
+            </div>
+            {country.trips.map((t) => (
+              <Link
+                key={t.slug}
+                href={`/trips/${t.slug}`}
+                className="flex items-center gap-2 text-sm hover:bg-line-soft/40 -mx-2 px-2 py-1 rounded transition"
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${t.completed ? 'bg-sage' : 'bg-gold'}`}
+                  aria-label={t.completed ? 'completed' : 'upcoming'}
+                />
+                <span className="flex-1 min-w-0 truncate">{t.name}</span>
+                <span className="text-xs text-ink-muted shrink-0 num-mono">
+                  {format(startOfDay(t.startDate), 'MMM yyyy')}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 

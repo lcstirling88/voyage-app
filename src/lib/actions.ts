@@ -981,6 +981,29 @@ export async function deleteVisitedCountry(formData: FormData) {
   revalidatePath('/atlas')
 }
 
+/**
+ * Set (or clear) the user's country of residence. Submitting an empty
+ * isoNumeric clears the field — useful for the "Not set" option in the
+ * picker. The home country paints burgundy on the Atlas map and is split
+ * out of the travel-destinations list + stats in loadAtlasForUser.
+ */
+export async function setHomeCountry(formData: FormData): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const user = await requireUser()
+  const isoNumeric = String(formData.get('isoNumeric') ?? '').trim()
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { homeCountryIso: isoNumeric || null },
+  })
+
+  revalidatePath('/profile')
+  revalidatePath('/atlas')
+  revalidatePath('/atlas/map')
+  return { ok: true }
+}
+
 // ----- Deletes ----------------------------------------------------------------------
 
 export async function deleteTrip(formData: FormData) {

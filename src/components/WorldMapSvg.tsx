@@ -1,7 +1,7 @@
 import {
   COUNTRY_PATHS, ATLAS_VIEW_WIDTH, ATLAS_VIEW_HEIGHT,
-  UPCOMING_ONLY_FILL, UNVISITED_FILL, LIVED_EDGE_COLOR,
-  type AtlasTierSpec,
+  UPCOMING_ONLY_FILL, UNVISITED_FILL, LIVED_EDGE_COLOR, HOME_FILL,
+  type AtlasRenderHint,
 } from '@/lib/atlas'
 
 const COUNTRY_STROKE = '#FBF8F1'
@@ -12,10 +12,7 @@ const COUNTRY_STROKE = '#FBF8F1'
  * polygons act as in-page anchors when `anchorPrefix` is provided —
  * useful on /atlas where each polygon links to its card below the map.
  */
-export type RenderHints = Map<
-  string,
-  { tier: AtlasTierSpec | null; upcomingOnly: boolean }
->
+export type RenderHints = Map<string, AtlasRenderHint>
 
 export function WorldMapSvg({
   renderHints, className, anchorPrefix, ariaLabel,
@@ -53,13 +50,17 @@ export function WorldMapSvg({
 
       {COUNTRY_PATHS.map((c) => {
         const hint = renderHints.get(c.id)
-        const fill = hint?.tier
-          ? hint.tier.mapFill
-          : hint?.upcomingOnly
-            ? UPCOMING_ONLY_FILL
-            : UNVISITED_FILL
-        const stroke = hint?.tier?.isLived ? LIVED_EDGE_COLOR : COUNTRY_STROKE
-        const strokeWidth = hint?.tier?.isLived ? 1.4 : 0.5
+        // Home wins over any tier — burgundy regardless of trip aggregations.
+        const fill = hint?.home
+          ? HOME_FILL
+          : hint?.tier
+            ? hint.tier.mapFill
+            : hint?.upcomingOnly
+              ? UPCOMING_ONLY_FILL
+              : UNVISITED_FILL
+        const prominent = hint?.home || hint?.tier?.isLived
+        const stroke = prominent ? LIVED_EDGE_COLOR : COUNTRY_STROKE
+        const strokeWidth = prominent ? 1.4 : 0.5
 
         const path = (
           <path key={c.id} d={c.d} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />

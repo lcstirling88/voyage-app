@@ -15,8 +15,10 @@ import { prisma } from '@/lib/db'
 import { requireUser } from '@/lib/session'
 import { signOut } from '@/lib/auth'
 import { loadAtlasForUser, renderHintsFromCountries } from '@/lib/atlas'
+import { listDestinations } from '@/lib/destinations'
 import { ItineraBrand } from '@/components/ItineraBrand'
 import { WorldMapSvg } from '@/components/WorldMapSvg'
+import { HomeCountryPickerClient } from '@/components/HomeCountryPickerClient'
 
 // Gold palette — warm tones tuned to read as a single layer of brushed metal.
 const GOLD_HIGHLIGHT = '#E8C078'   // catch-light
@@ -27,9 +29,17 @@ const GOLD_MAIN_GRADIENT = `linear-gradient(135deg, ${GOLD_HIGHLIGHT} 0%, ${GOLD
 
 export default async function ProfilePage() {
   const user = await requireUser()
-  const { countries, totalDays, totalTrips, manualByIso } = await loadAtlasForUser(user.id)
-  const renderHints = renderHintsFromCountries(countries)
+  const {
+    countries, homeCountry, homeCountryIso,
+    totalDays, totalTrips, manualByIso,
+  } = await loadAtlasForUser(user.id)
+  const renderHints = renderHintsFromCountries(countries, homeCountryIso)
   const totalCountries = countries.length
+  const destinationOptions = listDestinations().map((d) => ({
+    isoNumeric: d.isoNumeric!,
+    label: d.label,
+    passportIcon: d.passportIcon,
+  }))
 
   const memberships = await prisma.membership.findMany({
     where: { userId: user.id },
@@ -111,6 +121,18 @@ export default async function ProfilePage() {
             </p>
           </div>
         </Link>
+
+        {/* "Based in" — small editorial caption with inline picker. Sits
+            outside the framed-atlas link so the select interactions don't
+            fight with the link's navigation. */}
+        <div className="mt-3 sm:mt-4 text-center">
+          <HomeCountryPickerClient
+            options={destinationOptions}
+            currentIso={homeCountryIso}
+            currentLabel={homeCountry?.label ?? null}
+            currentIcon={homeCountry?.passportIcon ?? null}
+          />
+        </div>
       </div>
 
       {/* ---------- Identity + detail, in a narrower column ---------- */}

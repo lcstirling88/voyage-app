@@ -77,6 +77,11 @@ export const UPCOMING_ONLY_FILL = 'url(#hatch-upcoming)'
 export const UNVISITED_FILL = '#B8B0A0'
 /** Gold border colour for the Lived tier — matches --color-gold in globals.css. */
 export const LIVED_EDGE_COLOR = '#A8814B'
+/** Deep wine burgundy used for the user's country of residence. Sits at the
+ *  same visual weight as the Lived tier (#243730) but warm where that's
+ *  cool, so "home" reads as a distinct category rather than another tier on
+ *  the travel ladder. Paired with the gold Lived edge for prominence. */
+export const HOME_FILL = '#6B2737'
 
 // ---------------------------------------------------------------------------
 // Trip aggregation — shared by /atlas and /atlas/map so the same trips
@@ -94,12 +99,22 @@ export type AtlasManualVisit = {
 }
 
 export async function loadAtlasForUser(userId: string): Promise<{
+  /** Travel destinations only — the user's home country is split out below. */
   countries: AtlasCountrySummary[]
+  /** Where the user lives, if set. Carries any trip data for that ISO too
+   *  (domestic trips don't paint a tier on the map — home stays burgundy —
+   *  but the trip list still appears on the home card). */
+  homeCountry: AtlasCountrySummary | null
+  /** ISO 3166-1 numeric of the home country, or null. */
+  homeCountryIso: string | null
+  /** Days summed across `countries` only (excludes home). */
   totalDays: number
+  /** All memberships, including domestic trips. */
   totalTrips: number
   manualByIso: Map<string, AtlasManualVisit>
 }> {
-  const [memberships, visited] = await Promise.all([
+  const [user, memberships, visited] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { homeCountryIso: true } }),
     prisma.membership.findMany({
       where: { userId },
       include: { trip: true },
@@ -107,6 +122,7 @@ export async function loadAtlasForUser(userId: string): Promise<{
     }),
     prisma.visitedCountry.findMany({ where: { userId } }),
   ])
+  const homeIso = user?.homeCountryIso ?? null
   const trips = memberships.map((m) => m.trip)
 
   const today = startOfDay(new Date())
@@ -182,6 +198,32 @@ export async function loadAtlasForUser(userId: string): Promise<{
     }
   }
 
+  // Pull the home country out of the regular destinations list. If the user
+  // has trips to/within their home country those aggregations still exist —
+  // we just attach them to `homeCountry` rather than letting them appear as
+  // a travel destination on the map and in stats.
+  let homeCountry: AtlasCountrySummary | null = null
+  if (homeIso) {
+    const fromAgg = byCountry.get(homeIso)
+    if (fromAgg) {
+      homeCountry = fromAgg
+      byCountry.delete(homeIso)
+    } else {
+      const profile = profileForIsoNumeric(homeIso)
+      homeCountry = {
+        isoNumeric: homeIso,
+        label: profile?.label ?? homeIso,
+        passportIcon: profile?.passportIcon ?? null,
+        totalDays: 0,
+        completedDays: 0,
+        tripCount: 0,
+        hasCompleted: false,
+        hasUpcoming: false,
+        trips: [],
+      }
+    }
+  }
+
   const countries = [...byCountry.values()].sort((a, b) => {
     if (a.hasCompleted !== b.hasCompleted) return a.hasCompleted ? -1 : 1
     if (a.completedDays !== b.completedDays) return b.completedDays - a.completedDays
@@ -190,22 +232,41 @@ export async function loadAtlasForUser(userId: string): Promise<{
 
   return {
     countries,
+    homeCountry,
+    homeCountryIso: homeIso,
     totalDays: countries.reduce((s, c) => s + c.totalDays, 0),
     totalTrips: trips.length,
     manualByIso,
   }
 }
 
-/** Build the renderHints Map the WorldMapSvg component expects. */
+export type AtlasRenderHint = {
+  tier: AtlasTierSpec | null
+  upcomingOnly: boolean
+  /** True for the user's country of residence — paints burgundy regardless
+   *  of any trip aggregations on that ISO. */
+  home: boolean
+}
+
+/** Build the renderHints Map the WorldMapSvg component expects. Pass the
+ *  user's `homeCountryIso` to paint that country in burgundy with a gold
+ *  edge — overrides any tier that would otherwise be assigned. */
 export function renderHintsFromCountries(
   countries: AtlasCountrySummary[],
-): Map<string, { tier: AtlasTierSpec | null; upcomingOnly: boolean }> {
-  const hints = new Map<string, { tier: AtlasTierSpec | null; upcomingOnly: boolean }>()
+  homeCountryIso?: string | null,
+): Map<string, AtlasRenderHint> {
+  const hints = new Map<string, AtlasRenderHint>()
   for (const c of countries) {
     hints.set(c.isoNumeric, {
       tier: c.completedDays > 0 ? tierForDays(c.completedDays) : null,
       upcomingOnly: c.completedDays === 0 && c.hasUpcoming,
+      home: false,
     })
+  }
+  // Home wins over any tier — even if the user has trips there, the
+  // country reads as "home" on the map, not as a travel destination.
+  if (homeCountryIso) {
+    hints.set(homeCountryIso, { tier: null, upcomingOnly: false, home: true })
   }
   return hints
 }

@@ -13,8 +13,8 @@ import { WorldMapSvg } from '@/components/WorldMapSvg'
 
 export default async function AtlasMapPage() {
   const user = await requireUser()
-  const { countries } = await loadAtlasForUser(user.id)
-  const renderHints = renderHintsFromCountries(countries)
+  const { countries, homeCountryIso } = await loadAtlasForUser(user.id)
+  const renderHints = renderHintsFromCountries(countries, homeCountryIso)
 
   return (
     <div className="fixed inset-0 bg-paper-pure z-50 flex items-center justify-center overflow-hidden">
