@@ -58,6 +58,9 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
   const packingPreview = checklistTotal === 0
     ? 'Build your packing list'
     : `${checklistDone} / ${checklistTotal} done`
+  const packingPct = checklistTotal === 0
+    ? 0
+    : Math.round((checklistDone / checklistTotal) * 100)
   const inboxPreview = unreadEmails === 0
     ? 'Send confirmations here'
     : `${unreadEmails} new to process`
@@ -130,10 +133,12 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
         tripSlug={trip.slug}
         itineraryPreview={itineraryPreview}
         costsPreview={costsPreview}
+        costsPct={paidPct}
         weatherPreview={weatherPreview}
         localPreview={localPreview}
         documentsPreview={documentsPreview}
         packingPreview={packingPreview}
+        packingPct={packingPct}
         inboxPreview={inboxPreview}
         settingsPreview={settingsPreview}
       />
