@@ -28,8 +28,8 @@ export function TopBarBreadcrumb({ tripName }: { tripName: string }) {
   return (
     <div className="flex items-center gap-2 text-sm text-ink-muted min-w-0">
       {/* Full breadcrumb on tablet+ */}
-      <Link href="/trips" className="hidden md:inline hover:text-ink ulink">
-        Trips
+      <Link href="/profile" className="hidden md:inline hover:text-ink ulink">
+        My Profile
       </Link>
       <ChevronRight className="hidden md:inline w-3.5 h-3.5" />
       {/* Trip name links back to the Overview "home screen". On the overview
