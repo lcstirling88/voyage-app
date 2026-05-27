@@ -109,24 +109,20 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
             className="absolute inset-0 w-full h-full object-cover"
             style={{ objectPosition: heroImage.objectPosition ?? 'center' }}
           />
-          {/* Dark gradient at the bottom so the title stays legible regardless of photo */}
-          <div className="absolute inset-0 bg-gradient-to-b from-ink/10 via-transparent to-ink/70" />
+          {/* Subtle bottom gradient — kept just dark enough that the photo credit
+              chip in the corner stays readable over any background. */}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-ink/30" />
 
-          {/* Top-left country chip */}
+          {/* Top-left chip: country name + trip date range */}
           <div className="absolute top-4 left-4 sm:top-6 sm:left-8">
-            <span className="inline-flex items-center gap-2 text-paper-pure text-[10px] sm:text-[11px] uppercase tracking-[0.24em] bg-ink/40 backdrop-blur-md px-3 py-1.5 rounded-md">
-              {destProfile.label}
-            </span>
-          </div>
-
-          {/* Bottom-left title block */}
-          <div className="absolute bottom-4 left-4 sm:bottom-10 sm:left-10 right-4 max-w-2xl text-paper-pure">
-            <div className="text-[10px] uppercase tracking-[0.22em] text-paper-pure/80">The plan</div>
-            <h1 className="h-display text-3xl sm:text-6xl mt-1 sm:mt-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]">Day by day</h1>
-            {/* Long descriptor only on tablet+, so the mobile hero stays compact */}
-            <p className="hidden sm:block text-paper-pure/85 mt-3 max-w-xl text-sm sm:text-base drop-shadow">
-              Three sessions a day. Tap the <span className="num-mono">+</span> next to any day to add manually or ask the AI.
-            </p>
+            <div className="inline-block bg-ink/40 backdrop-blur-md px-3 py-1.5 rounded-md text-paper-pure">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.24em] font-medium">
+                {destProfile.label}
+              </div>
+              <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.2em] opacity-85 mt-0.5">
+                {format(trip.startDate, 'd MMM')} — {format(trip.endDate, 'd MMM yyyy')}
+              </div>
+            </div>
           </div>
 
           {/* Discreet photo credit, bottom-right */}
