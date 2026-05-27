@@ -39,27 +39,66 @@ export function TripCalendarStrip({
     end: startOfMonth(endDate),
   })
 
+  const multiMonth = months.length > 1
+
   return (
     <section className="bg-paper-pure border-b border-line">
-      <div className="px-4 sm:px-10 py-5 sm:py-7 max-w-5xl">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted mb-4">
-          Where you are
+      <div className="px-4 sm:px-10 py-4 sm:py-6 max-w-5xl">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
+            Where you are
+          </div>
+          {multiMonth && (
+            <div className="text-[9px] uppercase tracking-[0.2em] text-ink-muted/70 sm:hidden">
+              Swipe →
+            </div>
+          )}
         </div>
 
-        <div className={`grid gap-6 sm:gap-8 ${months.length > 1 ? 'sm:grid-cols-2' : ''}`}>
-          {months.map((monthStart) => (
-            <MonthGrid
-              key={monthStart.toISOString()}
-              monthStart={monthStart}
-              tripStart={startDate}
-              tripEnd={endDate}
-              daysByDate={daysByDate}
-              cityOrder={cityOrder}
-              palette={palette}
-              tripSlug={tripSlug}
-            />
-          ))}
-        </div>
+        {/*
+          Multi-month: horizontal scroll-snap carousel on mobile (one month per
+          swipe page), side-by-side grid on desktop. Single-month: just render
+          centred. Negative margin + matching padding extends the scroll area
+          to the screen edges on mobile so the swipe gesture feels native.
+        */}
+        {multiMonth ? (
+          <div
+            className="
+              flex sm:grid sm:grid-cols-2 gap-6 sm:gap-8
+              overflow-x-auto sm:overflow-visible
+              snap-x snap-mandatory sm:snap-none
+              -mx-4 px-4 sm:mx-0 sm:px-0
+              [scrollbar-width:none] [&::-webkit-scrollbar]:hidden
+            "
+          >
+            {months.map((monthStart) => (
+              <div
+                key={monthStart.toISOString()}
+                className="snap-center shrink-0 w-full sm:w-auto"
+              >
+                <MonthGrid
+                  monthStart={monthStart}
+                  tripStart={startDate}
+                  tripEnd={endDate}
+                  daysByDate={daysByDate}
+                  cityOrder={cityOrder}
+                  palette={palette}
+                  tripSlug={tripSlug}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <MonthGrid
+            monthStart={months[0]}
+            tripStart={startDate}
+            tripEnd={endDate}
+            daysByDate={daysByDate}
+            cityOrder={cityOrder}
+            palette={palette}
+            tripSlug={tripSlug}
+          />
+        )}
 
         {cityOrder.length > 0 && (
           <Legend cityOrder={cityOrder} palette={palette} />
@@ -98,13 +137,13 @@ function MonthGrid({
 
   return (
     <div>
-      <div className="font-display text-base sm:text-lg mb-3">
+      <div className="font-display text-base sm:text-lg mb-2 sm:mb-3">
         {format(monthStart, 'MMMM yyyy')}
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-[9px] uppercase tracking-[0.16em] text-ink-muted mb-1">
+      <div className="grid grid-cols-7 gap-1 text-[9px] uppercase tracking-[0.16em] text-ink-muted mb-0.5">
         {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-          <div key={d} className="text-center py-1">{d}</div>
+          <div key={d} className="text-center py-0.5">{d}</div>
         ))}
       </div>
 
@@ -161,13 +200,13 @@ function MonthGrid({
 
 function Legend({ cityOrder, palette }: { cityOrder: string[]; palette: PaletteSpec }) {
   return (
-    <div className="mt-5 sm:mt-6 pt-4 border-t border-line-soft flex flex-wrap gap-x-3 gap-y-2 text-[10px] uppercase tracking-[0.16em]">
+    <div className="mt-3 sm:mt-5 pt-3 border-t border-line-soft flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] uppercase tracking-[0.16em]">
       {cityOrder.map((city) => {
         const bg = lookupCityColor(city, cityOrder, palette)
         return (
           <span key={city} className="inline-flex items-center gap-1.5">
             <span
-              className="w-3 h-3 rounded-sm shrink-0"
+              className="w-2.5 h-2.5 rounded-sm shrink-0"
               style={{ background: bg }}
               aria-hidden
             />

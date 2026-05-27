@@ -101,7 +101,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
   return (
     <>
       {heroImage ? (
-        <div className="relative h-[45vh] min-h-[280px] sm:h-[50vh] sm:min-h-[360px] lg:min-h-[420px] bg-ink overflow-hidden">
+        <div className="relative h-[32vh] min-h-[220px] sm:h-[42vh] sm:min-h-[320px] lg:min-h-[380px] bg-ink overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element -- external CDN image, next/image needs domain config */}
           <img
             src={heroImage.src}
@@ -119,10 +119,11 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
           </div>
 
           {/* Bottom-left title block */}
-          <div className="absolute bottom-6 left-6 sm:bottom-10 sm:left-10 right-6 max-w-2xl text-paper-pure">
+          <div className="absolute bottom-4 left-4 sm:bottom-10 sm:left-10 right-4 max-w-2xl text-paper-pure">
             <div className="text-[10px] uppercase tracking-[0.22em] text-paper-pure/80">The plan</div>
-            <h1 className="h-display text-4xl sm:text-6xl mt-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]">Day by day</h1>
-            <p className="text-paper-pure/85 mt-3 max-w-xl text-sm sm:text-base drop-shadow">
+            <h1 className="h-display text-3xl sm:text-6xl mt-1 sm:mt-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]">Day by day</h1>
+            {/* Long descriptor only on tablet+, so the mobile hero stays compact */}
+            <p className="hidden sm:block text-paper-pure/85 mt-3 max-w-xl text-sm sm:text-base drop-shadow">
               Three sessions a day. Tap the <span className="num-mono">+</span> next to any day to add manually or ask the AI.
             </p>
           </div>
