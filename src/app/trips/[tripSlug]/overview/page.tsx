@@ -1,10 +1,12 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Sparkles, TrendingDown, AlertCircle, ZapIcon, Check, Clock } from 'lucide-react'
+import { Sparkles, TrendingDown, AlertCircle, Check, Clock } from 'lucide-react'
+import { differenceInDays } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { fmtDate, fmtMoney, safeJson } from '@/lib/format'
 import { getTheme } from '@/lib/theme'
 import { CountdownClient } from '@/components/CountdownClient'
+import { TripFeatureTiles } from '@/components/TripFeatureTiles'
 
 export default async function OverviewPage({ params }: { params: Promise<{ tripSlug: string }> }) {
   const { tripSlug } = await params
@@ -14,6 +16,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
       cities: { orderBy: { displayOrder: 'asc' } },
       bookings: { orderBy: { startAt: 'asc' } },
       payments: { orderBy: { dueDate: 'asc' } },
+      checklistItems: { select: { done: true } },
       _count: { select: { bookings: true, documents: true } },
     },
   })
@@ -31,6 +34,27 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
   // "Up next" - next 3 bookings starting from now
   const now = new Date()
   const upcoming = [...trip.bookings.filter((b) => b.startAt > now)].slice(0, 3)
+
+  // Live preview strings for the feature tiles below the hero.
+  const tripDays = Math.max(1, differenceInDays(trip.endDate, trip.startDate) + 1)
+  const checklistTotal = trip.checklistItems.length
+  const checklistDone = trip.checklistItems.filter((i) => i.done).length
+  const itineraryPreview = trip._count.bookings === 0
+    ? 'Nothing booked yet'
+    : `${trip._count.bookings} ${trip._count.bookings === 1 ? 'booking' : 'bookings'}${trip.cities.length > 0 ? ` · ${trip.cities.length} ${trip.cities.length === 1 ? 'city' : 'cities'}` : ''}`
+  const costsPreview = totalBudget === 0
+    ? 'Add a cost to track'
+    : `${paidPct}% paid · ${fmtMoney(paidSoFar, trip.homeCurrency)}`
+  const weatherPreview = `${tripDays}-day forecast`
+  const localPreview = trip.localInfoJson
+    ? 'Tipping · plugs · phrases'
+    : 'Generate local guide'
+  const documentsPreview = trip._count.documents === 0
+    ? 'No documents yet'
+    : `${trip._count.documents} ${trip._count.documents === 1 ? 'document' : 'documents'}`
+  const packingPreview = checklistTotal === 0
+    ? 'Build your packing list'
+    : `${checklistDone} / ${checklistTotal} done`
 
   return (
     <>
@@ -73,8 +97,21 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
         </div>
       </div>
 
+      {/* App-launcher tiles — replaces the old sidebar feature menu. Sits
+          right under the hero so the trip's main heading is immediately
+          followed by the six entry points into its detail pages. */}
+      <TripFeatureTiles
+        tripSlug={trip.slug}
+        itineraryPreview={itineraryPreview}
+        costsPreview={costsPreview}
+        weatherPreview={weatherPreview}
+        localPreview={localPreview}
+        documentsPreview={documentsPreview}
+        packingPreview={packingPreview}
+      />
+
       {/* Stats strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-line bg-paper-pure">
+      <div className="grid grid-cols-2 lg:grid-cols-4 border-b border-line bg-paper-pure mt-8 sm:mt-10">
         <div className="px-5 sm:px-8 py-5 sm:py-6 border-r border-line">
           <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Total budget</div>
           <div className="font-display text-2xl sm:text-3xl mt-1">

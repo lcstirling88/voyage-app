@@ -3,18 +3,15 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Compass, CalendarDays, Wallet, CloudSun, Globe2, Folder,
-  CheckSquare, Sparkles, Mail, Settings as SettingsIcon,
+  Compass, Sparkles, Mail, Settings as SettingsIcon,
 } from 'lucide-react'
 
+// The 6 trip features (Itinerary, Costs, Weather, Local Info, Documents,
+// Packing Assist) live as app-style tiles on the Overview page instead of
+// here — the sidebar now keeps just the "home" links (Overview, Assistant)
+// plus the utility footer (Inbox, Settings).
 const items = [
   { tab: 'overview',   label: 'Overview',          Icon: Compass },
-  { tab: 'itinerary',  label: 'Itinerary',         Icon: CalendarDays },
-  { tab: 'costs',      label: 'Costs & Payments',  Icon: Wallet },
-  { tab: 'weather',    label: 'Weather',           Icon: CloudSun },
-  { tab: 'local',      label: 'Local Info',        Icon: Globe2 },
-  { tab: 'documents',  label: 'Documents',         Icon: Folder },
-  { tab: 'checklist',  label: 'Checklist',         Icon: CheckSquare },
   { tab: 'assistant',  label: 'AI Assistant',      Icon: Sparkles },
 ] as const
 
