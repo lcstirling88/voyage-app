@@ -9,7 +9,7 @@
  */
 
 import Link from 'next/link'
-import { ChevronLeft, LogOut, Plane, Globe, Maximize2 } from 'lucide-react'
+import { ChevronLeft, LogOut, Globe, Maximize2, Archive, ChevronRight } from 'lucide-react'
 import { startOfDay } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { requireUser } from '@/lib/session'
@@ -19,6 +19,8 @@ import { listDestinations } from '@/lib/destinations'
 import { ItineraBrand } from '@/components/ItineraBrand'
 import { WorldMapSvg } from '@/components/WorldMapSvg'
 import { HomeCountryPickerClient } from '@/components/HomeCountryPickerClient'
+import { CountriesBadge } from '@/components/CountriesBadge'
+import { ActiveTripCard } from '@/components/ActiveTripCard'
 
 // Gold palette — warm tones tuned to read as a single layer of brushed metal.
 const GOLD_HIGHLIGHT = '#E8C078'   // catch-light
@@ -31,7 +33,7 @@ export default async function ProfilePage() {
   const user = await requireUser()
   const {
     countries, homeCountry, homeCountryIso,
-    totalDays, totalTrips, manualByIso,
+    totalDays,
   } = await loadAtlasForUser(user.id)
   const renderHints = renderHintsFromCountries(countries, homeCountryIso)
   const totalCountries = countries.length
@@ -41,16 +43,22 @@ export default async function ProfilePage() {
     passportIcon: d.passportIcon,
   }))
 
+  // Split memberships into active (endDate >= today — upcoming or in-progress)
+  // and past (endDate < today). Profile shows the active ones as big hero
+  // cards; past trips collapse into a single "Previous trips" link.
   const memberships = await prisma.membership.findMany({
     where: { userId: user.id },
     include: { trip: true },
+    orderBy: { trip: { startDate: 'asc' } },
   })
   const today = startOfDay(new Date())
-  const upcomingTrips = memberships.filter((m) => startOfDay(m.trip.endDate) >= today).length
+  const activeTrips = memberships
+    .map((m) => m.trip)
+    .filter((t) => startOfDay(t.endDate) >= today)
+  const pastTripsCount = memberships.length - activeTrips.length
 
   const displayName = user.name || user.email?.split('@')[0] || 'You'
   const initial = (displayName || 'V').charAt(0).toUpperCase()
-  const manualCount = manualByIso.size
 
   return (
     <main className="min-h-screen bg-paper-pure">
@@ -149,21 +157,57 @@ export default async function ProfilePage() {
             </div>
           </div>
 
-          <div className="mt-6 sm:mt-8 grid grid-cols-2 gap-3 sm:gap-5">
-            <Stat icon={<Globe className="w-4 h-4 text-sage" />} value={totalCountries} label={totalCountries === 1 ? 'country' : 'countries'} sub={manualCount > 0 ? `${manualCount} added by hand` : undefined} />
-            <Stat icon={<Plane className="w-4 h-4 text-sage" />} value={totalTrips} label={totalTrips === 1 ? 'trip' : 'trips'} sub={upcomingTrips > 0 ? `${upcomingTrips} upcoming` : undefined} />
+          {/* Countries Visited — single full-width stat with a medallion-style
+              tier badge. Tier ladder lives in lib/atlas (tierForCountryCount). */}
+          <div className="mt-6 sm:mt-8">
+            <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-sage" />
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">
+                      Countries Visited
+                    </div>
+                  </div>
+                  <div className="font-display text-4xl sm:text-5xl mt-2 num-mono">
+                    {totalCountries}
+                  </div>
+                </div>
+                <CountriesBadge count={totalCountries} />
+              </div>
+            </div>
           </div>
 
-          <div className="mt-6 sm:mt-8">
+          {/* Active trips — one big hero-image card per upcoming/in-progress trip. */}
+          {activeTrips.length > 0 && (
+            <div className="mt-8 sm:mt-10">
+              <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted mb-3 sm:mb-4">
+                {activeTrips.length === 1 ? 'Coming up' : 'Coming up'}
+              </div>
+              <div className="space-y-3 sm:space-y-4">
+                {activeTrips.map((t) => (
+                  <ActiveTripCard key={t.id} trip={t} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Previous trips — single card linking to /trips/past. */}
+          <div className="mt-8 sm:mt-10">
             <Link
-              href="/trips"
+              href="/trips/past"
               className="border border-line rounded-xl bg-paper-pure p-5 hover:border-sage transition flex items-center gap-3"
             >
-              <Plane className="w-5 h-5 text-ink-muted shrink-0" />
-              <div className="min-w-0">
-                <div className="font-display text-lg">My trips</div>
-                <div className="text-xs text-ink-muted">Browse and plan</div>
+              <Archive className="w-5 h-5 text-ink-muted shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="font-display text-lg">Previous trips</div>
+                <div className="text-xs text-ink-muted">
+                  {pastTripsCount === 0
+                    ? 'No completed trips yet'
+                    : `${pastTripsCount} ${pastTripsCount === 1 ? 'trip' : 'trips'} to look back on`}
+                </div>
               </div>
+              <ChevronRight className="w-4 h-4 text-ink-muted shrink-0" />
             </Link>
           </div>
 
@@ -186,16 +230,4 @@ export default async function ProfilePage() {
   )
 }
 
-function Stat({ icon, value, label, sub }: { icon: React.ReactNode; value: number; label: string; sub?: string }) {
-  return (
-    <div className="border border-line rounded-xl bg-paper-pure p-4 sm:p-5">
-      <div className="flex items-center gap-2">
-        {icon}
-        <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">{label}</div>
-      </div>
-      <div className="font-display text-3xl sm:text-4xl mt-2 num-mono">{value}</div>
-      {sub && <div className="text-[10px] uppercase tracking-[0.18em] text-sage mt-1">{sub}</div>}
-    </div>
-  )
-}
 

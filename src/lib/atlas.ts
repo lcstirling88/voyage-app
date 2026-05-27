@@ -69,6 +69,46 @@ export function tierForDays(days: number): AtlasTierSpec {
   return TIERS.touchdown
 }
 
+// ---------------------------------------------------------------------------
+// Countries-visited tier — separate from the per-country day tier above.
+// Rewards BREADTH (distinct countries) instead of DEPTH (days per country).
+// Shown as a small medallion badge on the profile's Countries Visited card.
+
+export type CountryBreadthTier =
+  | 'wanderer' | 'traveller' | 'explorer'
+  | 'adventurer' | 'globetrotter' | 'worldCitizen'
+
+export type CountryBreadthSpec = {
+  tier: CountryBreadthTier
+  label: string
+  /** Lucide icon key — resolved in the badge component to the actual icon. */
+  icon: 'pin' | 'plane' | 'compass' | 'map' | 'globe' | 'crown'
+  /** Pretty range label shown under the medallion. */
+  rangeLabel: string
+  /** Medallion background colour. */
+  color: string
+  /** Icon colour on top of the medallion. */
+  iconColor: string
+}
+
+const COUNTRY_BREADTH_TIERS: CountryBreadthSpec[] = [
+  { tier: 'wanderer',     label: 'Wanderer',      icon: 'pin',     rangeLabel: 'Start the journey', color: '#E8E2D4', iconColor: '#5C4938' },
+  { tier: 'traveller',    label: 'Traveller',     icon: 'plane',   rangeLabel: '1–10 countries',    color: '#A8B7AE', iconColor: '#FBF8F1' },
+  { tier: 'explorer',     label: 'Explorer',      icon: 'compass', rangeLabel: '11–25 countries',   color: '#7A9387', iconColor: '#FBF8F1' },
+  { tier: 'adventurer',   label: 'Adventurer',    icon: 'map',     rangeLabel: '26–50 countries',   color: '#3F5B4E', iconColor: '#FBF8F1' },
+  { tier: 'globetrotter', label: 'Globetrotter',  icon: 'globe',   rangeLabel: '51–99 countries',   color: '#A8814B', iconColor: '#FBF8F1' },
+  { tier: 'worldCitizen', label: 'World Citizen', icon: 'crown',   rangeLabel: '100+ countries',    color: '#6B2737', iconColor: '#FBF8F1' },
+]
+
+export function tierForCountryCount(count: number): CountryBreadthSpec {
+  if (count >= 100) return COUNTRY_BREADTH_TIERS[5]
+  if (count >= 51)  return COUNTRY_BREADTH_TIERS[4]
+  if (count >= 26)  return COUNTRY_BREADTH_TIERS[3]
+  if (count >= 11)  return COUNTRY_BREADTH_TIERS[2]
+  if (count >= 1)   return COUNTRY_BREADTH_TIERS[1]
+  return COUNTRY_BREADTH_TIERS[0]
+}
+
 /** Fill used for a country whose only trips are still upcoming (hatched pattern). */
 export const UPCOMING_ONLY_FILL = 'url(#hatch-upcoming)'
 /** Fill used for countries the user has no trips in. Two shades darker than
