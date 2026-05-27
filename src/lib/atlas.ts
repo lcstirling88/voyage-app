@@ -212,24 +212,28 @@ export function renderHintsFromCountries(
 export const ATLAS_VIEW_WIDTH = 980
 export const ATLAS_VIEW_HEIGHT = 480
 
-// Equal Earth's bounding ratio is roughly 2.05:1, so scale ≈ width / 5.4
-// fills the 980-wide viewBox horizontally with a small margin. Tuned by eye.
-const projection = geoEqualEarth()
-  .scale(ATLAS_VIEW_WIDTH / 5.4)
-  .translate([ATLAS_VIEW_WIDTH / 2, ATLAS_VIEW_HEIGHT / 2])
-const pathGen = geoPath(projection)
-
 type CountryProps = { name?: string }
 type CountryFeature = GeoJSON.Feature<Geometry, CountryProps> & { id?: string | number }
 
 /**
  * Pre-projected SVG path strings for every country in the world-atlas dataset,
  * keyed by ISO numeric code. Computed once at module load; cheap to re-use.
+ *
+ * Uses projection.fitExtent so the world is auto-fitted to the viewBox with
+ * a small inset margin — no risk of polar regions getting clipped by a
+ * hand-tuned scale being too large.
  */
 export const COUNTRY_PATHS: Array<{ id: string; d: string; name: string }> = (() => {
-  // The TopoJSON type from world-atlas isn't strictly typed, so cast through unknown.
   const topology = worldAtlas as unknown as Topology<{ countries: GeometryCollection }>
   const collection = feature(topology, topology.objects.countries) as unknown as FeatureCollection<Geometry, CountryProps>
+
+  const projection = geoEqualEarth()
+  projection.fitExtent(
+    [[8, 8], [ATLAS_VIEW_WIDTH - 8, ATLAS_VIEW_HEIGHT - 8]],
+    collection,
+  )
+  const pathGen = geoPath(projection)
+
   const out: Array<{ id: string; d: string; name: string }> = []
   for (const f of collection.features) {
     const cf = f as CountryFeature
