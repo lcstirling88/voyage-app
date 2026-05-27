@@ -1,20 +1,26 @@
 import Link from 'next/link'
 import {
   CalendarDays, Wallet, CloudSun, Globe2, Folder, ListChecks,
-  Mail, Settings as SettingsIcon, ArrowUpRight,
+  Mail, Settings as SettingsIcon,
 } from 'lucide-react'
 
 /**
- * App-launcher grid — the entire navigation surface for a trip. Eight
- * tiles replacing the old left-rail sidebar: six core features
- * (Itinerary / Costs / Weather / Local Info / Documents / Packing) plus
- * two utility tiles (Forward bookings / Trip settings) that used to live
- * in the sidebar footer.
+ * App-launcher grid — the entire navigation surface for a trip.
  *
- * Each tile carries a live one-line stat preview so the grid functions
- * like a row of app widgets, not just labelled buttons. Icon tints reuse
- * the existing palette (sage gradient + gold + terracotta + burgundy)
- * so the row reads as one composed family rather than iOS rainbow tiles.
+ * Each tile is a solid-coloured "app icon" square (no paper wrapper) with
+ * the icon centred on top, and the label + preview stacked underneath the
+ * card the way an iPhone home screen lays out app names beneath icons.
+ * Eight tiles, six core features + two utilities:
+ *   Itinerary · Costs · Weather · Local Info ·
+ *   Documents · Packing · Forward bookings · Trip settings.
+ *
+ * Two tiles (Costs, Packing) carry a progress strip across the bottom
+ * edge of the card — a thin cream bar that fills the otherwise-empty
+ * lower band with a piece of glanceable progress info.
+ *
+ * Tints reuse the existing palette (sage gradient + gold + terracotta +
+ * burgundy + taupes) so the row reads as one composed family rather
+ * than iOS rainbow tiles.
  */
 
 type TileSpec = {
@@ -22,15 +28,11 @@ type TileSpec = {
   label: string
   preview: string
   Icon: typeof CalendarDays
-  /** Background tint for the icon square. Light wash of the accent. */
-  tintBg: string
-  /** Solid accent colour for the icon glyph itself. Also used as the
-   *  fill colour of the progress bar when `progressPct` is set. */
-  tintFg: string
-  /** Optional 0–100 progress value. When set, the tile renders a thin
-   *  horizontal bar above the title. Used for Costs (% paid) and Packing
-   *  Assist (% items done) — fills the otherwise empty mid-card space
-   *  with a piece of useful at-a-glance information. */
+  /** Solid colour for the entire card. */
+  color: string
+  /** Optional 0–100 progress value. When set, a thin cream bar runs
+   *  across the bottom inside edge of the card. Used for Costs (% paid)
+   *  and Packing Assist (% items done). */
   progressPct?: number
 }
 
@@ -65,16 +67,14 @@ export function TripFeatureTiles({
       label: 'Itinerary',
       preview: itineraryPreview,
       Icon: CalendarDays,
-      tintBg: 'rgba(63, 91, 78, 0.10)',   // deep sage wash
-      tintFg: '#3F5B4E',
+      color: '#3F5B4E',   // deep sage
     },
     {
       href: `/trips/${tripSlug}/costs`,
       label: 'Costs & Payments',
       preview: costsPreview,
       Icon: Wallet,
-      tintBg: 'rgba(168, 129, 75, 0.14)', // gold wash
-      tintFg: '#A8814B',
+      color: '#A8814B',   // gold
       progressPct: costsPct,
     },
     {
@@ -82,32 +82,28 @@ export function TripFeatureTiles({
       label: 'Weather',
       preview: weatherPreview,
       Icon: CloudSun,
-      tintBg: 'rgba(122, 147, 135, 0.16)', // mid sage wash
-      tintFg: '#7A9387',
+      color: '#7A9387',   // mid sage
     },
     {
       href: `/trips/${tripSlug}/local`,
       label: 'Local Info',
       preview: localPreview,
       Icon: Globe2,
-      tintBg: 'rgba(198, 107, 71, 0.12)', // terracotta wash (brand)
-      tintFg: '#C66B47',
+      color: '#C66B47',   // terracotta (brand)
     },
     {
       href: `/trips/${tripSlug}/documents`,
       label: 'Documents',
       preview: documentsPreview,
       Icon: Folder,
-      tintBg: 'rgba(36, 55, 48, 0.12)',  // deepest sage wash
-      tintFg: '#243730',
+      color: '#243730',   // deepest sage
     },
     {
       href: `/trips/${tripSlug}/checklist`,
       label: 'Packing Assist',
       preview: packingPreview,
       Icon: ListChecks,
-      tintBg: 'rgba(107, 39, 55, 0.10)', // burgundy wash (matches Home tier)
-      tintFg: '#6B2737',
+      color: '#6B2737',   // burgundy (matches Home tier)
       progressPct: packingPct,
     },
     {
@@ -115,70 +111,70 @@ export function TripFeatureTiles({
       label: 'Forward bookings',
       preview: inboxPreview,
       Icon: Mail,
-      tintBg: 'rgba(92, 73, 56, 0.10)',  // warm taupe wash — utility neutral
-      tintFg: '#5C4938',
+      color: '#5C4938',   // warm taupe
     },
     {
       href: `/trips/${tripSlug}/settings`,
       label: 'Trip settings',
       preview: settingsPreview,
       Icon: SettingsIcon,
-      tintBg: 'rgba(101, 101, 110, 0.10)', // cool taupe wash — utility neutral
-      tintFg: '#52525B',
+      color: '#52525B',   // cool taupe
     },
   ]
 
   return (
     <div className="px-5 sm:px-10 pt-8 sm:pt-10 pb-10 sm:pb-12">
-      {/* Cap the grid at a comfortable reading width so on a 1920px monitor
-          the tiles don't balloon into vacant rectangles. ~1024px keeps each
-          desktop tile around 240px — close to the size that feels right on
-          mobile. */}
+      {/* Cap the grid at a comfortable width so on big monitors the
+          app icons don't balloon. ~1024px keeps each tile ≈ 220px square,
+          which is where the icon-as-card design feels best. */}
       <div className="max-w-5xl">
-        <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted mb-3 sm:mb-4">
+        <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted mb-4 sm:mb-5">
           Trip
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-          {tiles.map(({ href, label, preview, Icon, tintBg, tintFg, progressPct }) => (
-            <Link
-              key={href}
-              href={href}
-              className="group relative block rounded-2xl border border-line bg-paper-pure p-4 sm:p-5 hover:border-sage hover:shadow-lift transition aspect-[5/4] flex flex-col"
-            >
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-5 sm:gap-x-5 sm:gap-y-7">
+          {tiles.map(({ href, label, preview, Icon, color, progressPct }) => (
+            <Link key={href} href={href} className="group block">
+              {/* The "app icon" — a solid-colour square that IS the tile.
+                  Subtle inset highlight on top + inset shadow on bottom give
+                  the surface a slight dimension so it doesn't read flat. */}
               <div
-                className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl grid place-items-center shrink-0"
-                style={{ background: tintBg }}
-                aria-hidden
+                className="relative aspect-square rounded-3xl overflow-hidden grid place-items-center transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-lift"
+                style={{
+                  background: color,
+                  boxShadow:
+                    'inset 0 1px 0 rgba(255, 255, 255, 0.16), ' +
+                    'inset 0 -1px 0 rgba(0, 0, 0, 0.12), ' +
+                    '0 1px 2px rgba(0, 0, 0, 0.08)',
+                }}
               >
-                <Icon className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: tintFg }} />
-              </div>
+                <Icon
+                  className="w-12 h-12 sm:w-16 sm:h-16 text-paper-pure"
+                  strokeWidth={1.5}
+                  aria-hidden
+                />
 
-              <ArrowUpRight
-                className="absolute top-4 right-4 sm:top-5 sm:right-5 w-4 h-4 text-ink-muted/30 group-hover:text-sage transition"
-                aria-hidden
-              />
-
-              <div className="mt-auto">
-                {/* Thin progress bar — only on tiles where we have a real %.
-                    Fills the otherwise empty mid-card space with a
-                    glanceable piece of info, tinted with the tile's accent. */}
+                {/* Progress strip — only when the tile has a real %. Cream
+                    track on the colour, with a brighter cream fill. Reads
+                    as part of the icon's surface, not a separate widget. */}
                 {typeof progressPct === 'number' && (
-                  <div className="mb-2 sm:mb-2.5">
-                    <div className="h-1 rounded-full bg-line-soft overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${Math.max(0, Math.min(100, progressPct))}%`,
-                          background: tintFg,
-                        }}
-                        aria-hidden
-                      />
-                    </div>
+                  <div className="absolute inset-x-4 bottom-4 h-1 rounded-full bg-paper-pure/25 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-paper-pure transition-all"
+                      style={{ width: `${Math.max(0, Math.min(100, progressPct))}%` }}
+                      aria-hidden
+                    />
                   </div>
                 )}
+              </div>
 
-                <h3 className="font-display text-base sm:text-lg leading-tight">{label}</h3>
-                <p className="text-[11px] sm:text-xs text-ink-muted mt-1 truncate">
+              {/* Label + preview sit *under* the card, like app names on a
+                  home screen. Center-aligned so they read as captions to
+                  the square above. */}
+              <div className="mt-2.5 sm:mt-3 text-center px-1">
+                <h3 className="font-display text-sm sm:text-base leading-tight text-ink group-hover:text-sage transition">
+                  {label}
+                </h3>
+                <p className="text-[10px] sm:text-[11px] text-ink-muted mt-0.5 truncate">
                   {preview}
                 </p>
               </div>
