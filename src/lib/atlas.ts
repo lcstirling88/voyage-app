@@ -71,6 +71,89 @@ export const UNVISITED_FILL = '#E8E2D4'
 /** Gold border colour for the Lived tier — matches --color-gold in globals.css. */
 export const LIVED_EDGE_COLOR = '#A8814B'
 
+// ---------------------------------------------------------------------------
+// Trip aggregation — shared by /atlas and /atlas/map so the same trips
+// produce the same map highlights on both routes.
+
+import { differenceInDays, startOfDay } from 'date-fns'
+import { prisma } from './db'
+import { profileForDestination } from './destinations'
+
+export async function loadAtlasForUser(userId: string): Promise<{
+  countries: AtlasCountrySummary[]
+  totalDays: number
+  totalTrips: number
+}> {
+  const memberships = await prisma.membership.findMany({
+    where: { userId },
+    include: { trip: true },
+    orderBy: { trip: { startDate: 'asc' } },
+  })
+  const trips = memberships.map((m) => m.trip)
+
+  const today = startOfDay(new Date())
+  const byCountry = new Map<string, AtlasCountrySummary>()
+  for (const trip of trips) {
+    const profile = profileForDestination(trip.destination)
+    if (!profile.isoNumeric) continue
+    const days = Math.max(1, differenceInDays(startOfDay(trip.endDate), startOfDay(trip.startDate)) + 1)
+    const completed = startOfDay(trip.endDate) < today
+    const existing = byCountry.get(profile.isoNumeric)
+    if (existing) {
+      existing.totalDays += days
+      if (completed) existing.completedDays += days
+      existing.tripCount += 1
+      if (completed) existing.hasCompleted = true
+      else existing.hasUpcoming = true
+      existing.trips.push({
+        slug: trip.slug, name: trip.name,
+        startDate: trip.startDate, endDate: trip.endDate, days, completed,
+      })
+    } else {
+      byCountry.set(profile.isoNumeric, {
+        isoNumeric: profile.isoNumeric,
+        label: profile.label,
+        passportIcon: profile.passportIcon ?? null,
+        totalDays: days,
+        completedDays: completed ? days : 0,
+        tripCount: 1,
+        hasCompleted: completed,
+        hasUpcoming: !completed,
+        trips: [{
+          slug: trip.slug, name: trip.name,
+          startDate: trip.startDate, endDate: trip.endDate, days, completed,
+        }],
+      })
+    }
+  }
+
+  const countries = [...byCountry.values()].sort((a, b) => {
+    if (a.hasCompleted !== b.hasCompleted) return a.hasCompleted ? -1 : 1
+    if (a.completedDays !== b.completedDays) return b.completedDays - a.completedDays
+    return b.totalDays - a.totalDays
+  })
+
+  return {
+    countries,
+    totalDays: countries.reduce((s, c) => s + c.totalDays, 0),
+    totalTrips: trips.length,
+  }
+}
+
+/** Build the renderHints Map the WorldMapSvg component expects. */
+export function renderHintsFromCountries(
+  countries: AtlasCountrySummary[],
+): Map<string, { tier: AtlasTierSpec | null; upcomingOnly: boolean }> {
+  const hints = new Map<string, { tier: AtlasTierSpec | null; upcomingOnly: boolean }>()
+  for (const c of countries) {
+    hints.set(c.isoNumeric, {
+      tier: c.completedDays > 0 ? tierForDays(c.completedDays) : null,
+      upcomingOnly: c.completedDays === 0 && c.hasUpcoming,
+    })
+  }
+  return hints
+}
+
 /** Map's intrinsic projection viewbox dimensions. Used by both the SVG and the page layout. */
 export const ATLAS_VIEW_WIDTH = 980
 export const ATLAS_VIEW_HEIGHT = 480

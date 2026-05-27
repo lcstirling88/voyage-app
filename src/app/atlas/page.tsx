@@ -1,47 +1,26 @@
 /**
- * Atlas — the user's personal world map of trips planned and taken.
+ * Atlas overview — world map + per-country cards.
  *
- * Visual logic on the map:
- *  - Countries with no trip: muted warm grey.
- *  - Countries with only upcoming trips: hatched pattern (anticipation, not
- *    earned yet — they haven't actually been there).
- *  - Countries with completed trips: filled in a sage tier-fill based on the
- *    cumulative completed days the user has spent there:
- *      Touchdown   1-3   days  →  very pale sage   (★)
- *      Visited     4-14  days  →  medium sage      (★★)
- *      Explored    15-30 days  →  full sage        (★★★)
- *      Lived       31+   days  →  deep sage + gold edge on the map polygon
- *                                  and a 👑 stamp on the card.
- *
- * Card progression mirrors the map: stars + tier label, gold stamp at the
- * top tier, "Repeat visitor" chip on 2+ trips regardless of tier. Each
- * country card has an id so clicking the country on the map smooth-scrolls
- * to its details.
+ * The SVG map and the trip aggregation live in shared helpers
+ * (components/WorldMapSvg, lib/atlas) so the full-screen route at
+ * /atlas/map can render the same map without duplicating logic.
  */
 
 import Link from 'next/link'
-import { differenceInDays, startOfDay, format } from 'date-fns'
-import { Globe, Sparkles, Crown } from 'lucide-react'
-import { prisma } from '@/lib/db'
+import { startOfDay, format } from 'date-fns'
+import { Globe, Sparkles, Crown, Maximize2 } from 'lucide-react'
 import { requireUser } from '@/lib/session'
-import { profileForDestination } from '@/lib/destinations'
 import {
-  COUNTRY_PATHS, ATLAS_VIEW_WIDTH, ATLAS_VIEW_HEIGHT,
-  tierForDays, UPCOMING_ONLY_FILL, UNVISITED_FILL, LIVED_EDGE_COLOR,
-  type AtlasCountrySummary, type AtlasTierSpec,
+  loadAtlasForUser, renderHintsFromCountries, tierForDays,
+  LIVED_EDGE_COLOR,
+  type AtlasCountrySummary,
 } from '@/lib/atlas'
+import { WorldMapSvg } from '@/components/WorldMapSvg'
 
-const COUNTRY_STROKE = '#FBF8F1'
-
-/**
- * Build a Twemoji CDN URL from a unicode emoji string. Twemoji renders the
- * same emoji as a consistent flat-design SVG on every device, so the country
- * stickers look polished regardless of the user's OS emoji set.
- */
 function twemojiUrl(emoji: string): string {
   const codepoints = [...emoji]
     .map((c) => c.codePointAt(0)!)
-    .filter((cp) => cp !== 0xFE0F)  // strip variation-selector-16
+    .filter((cp) => cp !== 0xFE0F)
     .map((cp) => cp.toString(16))
     .join('-')
   return `https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/svg/${codepoints}.svg`
@@ -49,69 +28,9 @@ function twemojiUrl(emoji: string): string {
 
 export default async function AtlasPage() {
   const user = await requireUser()
-
-  const memberships = await prisma.membership.findMany({
-    where: { userId: user.id },
-    include: { trip: true },
-    orderBy: { trip: { startDate: 'asc' } },
-  })
-  const trips = memberships.map((m) => m.trip)
-
-  // Aggregate trips by ISO country code.
-  const today = startOfDay(new Date())
-  const byCountry = new Map<string, AtlasCountrySummary>()
-  for (const trip of trips) {
-    const profile = profileForDestination(trip.destination)
-    if (!profile.isoNumeric) continue
-    const days = Math.max(1, differenceInDays(startOfDay(trip.endDate), startOfDay(trip.startDate)) + 1)
-    const completed = startOfDay(trip.endDate) < today
-    const existing = byCountry.get(profile.isoNumeric)
-    if (existing) {
-      existing.totalDays += days
-      if (completed) existing.completedDays += days
-      existing.tripCount += 1
-      if (completed) existing.hasCompleted = true
-      else existing.hasUpcoming = true
-      existing.trips.push({
-        slug: trip.slug, name: trip.name,
-        startDate: trip.startDate, endDate: trip.endDate, days, completed,
-      })
-    } else {
-      byCountry.set(profile.isoNumeric, {
-        isoNumeric: profile.isoNumeric,
-        label: profile.label,
-        passportIcon: profile.passportIcon ?? null,
-        totalDays: days,
-        completedDays: completed ? days : 0,
-        tripCount: 1,
-        hasCompleted: completed,
-        hasUpcoming: !completed,
-        trips: [{
-          slug: trip.slug, name: trip.name,
-          startDate: trip.startDate, endDate: trip.endDate, days, completed,
-        }],
-      })
-    }
-  }
-
-  const countries = [...byCountry.values()].sort((a, b) => {
-    // Trophies first (any completed days), then most depth.
-    if (a.hasCompleted !== b.hasCompleted) return a.hasCompleted ? -1 : 1
-    if (a.completedDays !== b.completedDays) return b.completedDays - a.completedDays
-    return b.totalDays - a.totalDays
-  })
-
-  const totalDays = countries.reduce((s, c) => s + c.totalDays, 0)
+  const { countries, totalDays, totalTrips } = await loadAtlasForUser(user.id)
+  const renderHints = renderHintsFromCountries(countries)
   const totalCountries = countries.length
-
-  // Per-country render hints for the SVG: { tier (if completed), upcoming-only }
-  const renderHints = new Map<string, { tier: AtlasTierSpec | null; upcomingOnly: boolean }>()
-  for (const c of countries) {
-    renderHints.set(c.isoNumeric, {
-      tier: c.completedDays > 0 ? tierForDays(c.completedDays) : null,
-      upcomingOnly: c.completedDays === 0 && c.hasUpcoming,
-    })
-  }
 
   return (
     <>
@@ -124,7 +43,7 @@ export default async function AtlasPage() {
           <p className="text-ink-muted mt-2 text-sm sm:text-base">
             <span className="font-medium text-ink">{totalCountries}</span> {totalCountries === 1 ? 'country' : 'countries'} ·{' '}
             <span className="font-medium text-ink">{totalDays}</span> {totalDays === 1 ? 'day' : 'days'} ·{' '}
-            <span className="font-medium text-ink">{trips.length}</span> {trips.length === 1 ? 'trip' : 'trips'}
+            <span className="font-medium text-ink">{totalTrips}</span> {totalTrips === 1 ? 'trip' : 'trips'}
           </p>
         ) : (
           <p className="text-ink-muted mt-2 text-sm sm:text-base">
@@ -133,61 +52,34 @@ export default async function AtlasPage() {
         )}
       </div>
 
-      <section className="border-b border-line bg-paper-pure">
-        <div className="px-2 sm:px-6 py-4 sm:py-6">
-          <svg
-            viewBox={`0 0 ${ATLAS_VIEW_WIDTH} ${ATLAS_VIEW_HEIGHT}`}
-            className="w-full h-auto max-h-[55vh]"
-            role="img"
-            aria-label="World map highlighting countries you have trips in"
+      <section className="border-b border-line bg-paper-pure relative">
+        <div className="px-0 sm:px-2 py-3 sm:py-4 relative">
+          <WorldMapSvg
+            renderHints={renderHints}
+            className="w-full h-auto"
+            anchorPrefix="#country-"
+          />
+
+          {/* Full-screen toggle — opens /atlas/map which lays the map out at
+              100vw × 100vh, naturally landscape-oriented on a rotated phone. */}
+          <Link
+            href="/atlas/map"
+            aria-label="Open the world map full screen"
+            className="absolute top-3 right-3 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.18em] text-ink-muted bg-paper-pure/85 backdrop-blur px-2.5 py-1.5 rounded-md border border-line hover:text-ink hover:border-ink transition"
           >
-            <defs>
-              <pattern
-                id="hatch-upcoming"
-                width="6"
-                height="6"
-                patternUnits="userSpaceOnUse"
-                patternTransform="rotate(45)"
-              >
-                <rect width="6" height="6" fill="#A8B7AE" />
-                <rect width="3" height="6" fill="#3F5B4E" />
-              </pattern>
-            </defs>
-
-            <rect width={ATLAS_VIEW_WIDTH} height={ATLAS_VIEW_HEIGHT} fill="#F4EFE3" />
-
-            {COUNTRY_PATHS.map((c) => {
-              const hint = renderHints.get(c.id)
-              const fill = hint?.tier
-                ? hint.tier.mapFill
-                : hint?.upcomingOnly
-                  ? UPCOMING_ONLY_FILL
-                  : UNVISITED_FILL
-              // Lived tier gets a thicker gold edge to mark the top rank.
-              const stroke = hint?.tier?.isLived ? LIVED_EDGE_COLOR : COUNTRY_STROKE
-              const strokeWidth = hint?.tier?.isLived ? 1.4 : 0.5
-
-              const path = (
-                <path key={c.id} d={c.d} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />
-              )
-              if (!hint) return path
-              return (
-                <a key={c.id} href={`#country-${c.id}`} aria-label={`${c.name} — jump to trip card`}>
-                  {path}
-                </a>
-              )
-            })}
-          </svg>
+            <Maximize2 className="w-3 h-3" />
+            <span className="hidden sm:inline">Full view</span>
+          </Link>
 
           {totalCountries > 0 && (
-            <div className="mt-3 sm:mt-4 flex items-center justify-center gap-3 sm:gap-5 text-[9px] sm:text-[10px] uppercase tracking-[0.18em] text-ink-muted flex-wrap">
+            <div className="mt-3 sm:mt-4 px-3 sm:px-0 flex items-center justify-center gap-3 sm:gap-5 text-[9px] sm:text-[10px] uppercase tracking-[0.18em] text-ink-muted flex-wrap">
               <LegendSwatch color="#C8D4CC" label="★ Touchdown" />
               <LegendSwatch color="#7A9387" label="★★ Visited" />
               <LegendSwatch color="#3F5B4E" label="★★★ Explored" />
               <LegendSwatch color="#243730" label="★★★★ Lived" border={LIVED_EDGE_COLOR} />
               <LegendSwatch
                 label="Going there"
-                gradient={`repeating-linear-gradient(45deg, #3F5B4E 0 3px, #A8B7AE 3px 6px)`}
+                gradient="repeating-linear-gradient(45deg, #3F5B4E 0 3px, #A8B7AE 3px 6px)"
               />
             </div>
           )}
@@ -244,8 +136,6 @@ function CountryCard({ country }: { country: AtlasCountrySummary }) {
       id={`country-${country.isoNumeric}`}
       className="border border-line rounded-xl bg-paper-pure p-4 sm:p-5 scroll-mt-24 flex items-start gap-4"
     >
-      {/* Sticker tile — Twemoji SVG so the flat-design illustration is
-          consistent on every device. */}
       <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg bg-line-soft shrink-0 grid place-items-center overflow-hidden">
         {country.passportIcon ? (
           /* eslint-disable-next-line @next/next/no-img-element */
@@ -267,7 +157,6 @@ function CountryCard({ country }: { country: AtlasCountrySummary }) {
           </span>
         </div>
 
-        {/* Tier + repeat-visitor badges */}
         <div className="mt-1.5 flex items-center gap-2 flex-wrap">
           {tier && (
             <span
@@ -307,7 +196,7 @@ function CountryCard({ country }: { country: AtlasCountrySummary }) {
               />
               <span className="flex-1 min-w-0 truncate">{t.name}</span>
               <span className="text-xs text-ink-muted shrink-0 num-mono">
-                {format(t.startDate, 'MMM yyyy')}
+                {format(startOfDay(t.startDate), 'MMM yyyy')}
               </span>
             </Link>
           ))}
