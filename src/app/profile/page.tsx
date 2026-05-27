@@ -9,7 +9,7 @@
  */
 
 import Link from 'next/link'
-import { ChevronLeft, LogOut, Plane, Globe, MapPin, Maximize2 } from 'lucide-react'
+import { ChevronLeft, LogOut, Plane, Globe, Maximize2 } from 'lucide-react'
 import { startOfDay } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { requireUser } from '@/lib/session'
@@ -149,13 +149,12 @@ export default async function ProfilePage() {
             </div>
           </div>
 
-          <div className="mt-6 sm:mt-8 grid grid-cols-3 gap-3 sm:gap-5">
+          <div className="mt-6 sm:mt-8 grid grid-cols-2 gap-3 sm:gap-5">
             <Stat icon={<Globe className="w-4 h-4 text-sage" />} value={totalCountries} label={totalCountries === 1 ? 'country' : 'countries'} sub={manualCount > 0 ? `${manualCount} added by hand` : undefined} />
-            <Stat icon={<MapPin className="w-4 h-4 text-sage" />} value={totalDays} label={totalDays === 1 ? 'day' : 'days'} />
             <Stat icon={<Plane className="w-4 h-4 text-sage" />} value={totalTrips} label={totalTrips === 1 ? 'trip' : 'trips'} sub={upcomingTrips > 0 ? `${upcomingTrips} upcoming` : undefined} />
           </div>
 
-          <div className="mt-6 sm:mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="mt-6 sm:mt-8">
             <Link
               href="/trips"
               className="border border-line rounded-xl bg-paper-pure p-5 hover:border-sage transition flex items-center gap-3"
@@ -164,16 +163,6 @@ export default async function ProfilePage() {
               <div className="min-w-0">
                 <div className="font-display text-lg">My trips</div>
                 <div className="text-xs text-ink-muted">Browse and plan</div>
-              </div>
-            </Link>
-            <Link
-              href="/atlas"
-              className="border border-line rounded-xl bg-paper-pure p-5 hover:border-sage transition flex items-center gap-3"
-            >
-              <Globe className="w-5 h-5 text-ink-muted shrink-0" />
-              <div className="min-w-0">
-                <div className="font-display text-lg">My atlas</div>
-                <div className="text-xs text-ink-muted">Country detail + add visits</div>
               </div>
             </Link>
           </div>
