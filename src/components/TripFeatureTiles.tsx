@@ -137,7 +137,10 @@ export function TripFeatureTiles({
 
   return (
     <div className="px-5 sm:px-10 pt-8 sm:pt-10 pb-10 sm:pb-12">
-      <div className="max-w-5xl">
+      {/* mx-auto centres the capped grid in the viewport so on wide
+          screens the tiles sit in the middle of the page rather than
+          hugging the left edge under the full-bleed hero above. */}
+      <div className="max-w-5xl mx-auto">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted mb-4 sm:mb-5">
           Trip
         </div>
