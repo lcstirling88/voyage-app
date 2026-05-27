@@ -14,10 +14,11 @@ import { InlineDeleteButton } from '@/components/InlineDeleteButton'
 import {
   planForDay, SESSIONS, SESSION_LABEL, formatTime,
   hotelOrderForTrip, sleepingTonightFor, getPalette, colorForHotel,
-  cleanHotelName, cityForBooking,
+  cleanHotelName, cityForBooking, cityOrderForTrip,
   type DayPlan, type Session, type SessionItem, type ParsedTime, type PaletteSpec,
 } from '@/lib/itinerary'
 import { profileForDestination } from '@/lib/destinations'
+import { TripCalendarStrip } from '@/components/TripCalendarStrip'
 import type { Booking } from '@prisma/client'
 
 /**
@@ -80,6 +81,18 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
   const hotelOrder = hotelOrderForTrip(trip.bookings)
   const palette = getPalette(trip.colorPalette)
 
+  // For the overview calendar: derive a city per trip night (from the hotel
+  // booking that covers that night) and a chronological city order for stable
+  // palette indexing. Same colour for any night spent in the same city.
+  const cityOrder = cityOrderForTrip(trip.bookings)
+  const daysByDate = new Map<string, { city: string | null }>()
+  for (const day of days) {
+    const sleeping = sleepingTonightFor(day, trip.bookings)
+    daysByDate.set(format(day, 'yyyy-MM-dd'), {
+      city: sleeping ? cityForBooking(sleeping) : null,
+    })
+  }
+
   // Iconic destination photo + country label for the hero. Falls back to the
   // existing gradient header for destinations we don't have a curated image for.
   const destProfile = profileForDestination(trip.destination)
@@ -88,7 +101,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
   return (
     <>
       {heroImage ? (
-        <div className="relative h-[55vh] min-h-[340px] sm:h-[60vh] sm:min-h-[440px] lg:min-h-[520px] bg-ink overflow-hidden">
+        <div className="relative h-[45vh] min-h-[280px] sm:h-[50vh] sm:min-h-[360px] lg:min-h-[420px] bg-ink overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element -- external CDN image, next/image needs domain config */}
           <img
             src={heroImage.src}
@@ -131,6 +144,15 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
           </p>
         </div>
       )}
+
+      <TripCalendarStrip
+        startDate={trip.startDate}
+        endDate={trip.endDate}
+        daysByDate={daysByDate}
+        cityOrder={cityOrder}
+        palette={palette}
+        tripSlug={trip.slug}
+      />
 
       <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-5xl space-y-10 sm:space-y-12">
         {days.map((day, idx) => {
@@ -178,7 +200,7 @@ function DayBlock({
   paletteTextColor: string
 }) {
   return (
-    <div className="tline pl-8 sm:pl-10">
+    <div id={`day-${dateKey}`} className="tline pl-8 sm:pl-10 scroll-mt-6 sm:scroll-mt-10">
       <div className="tline-dot" />
       <div className="flex items-center gap-3 mb-2">
         <span className="font-display text-3xl sm:text-4xl">Day {String(idx + 1).padStart(2, '0')}</span>

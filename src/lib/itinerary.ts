@@ -150,6 +150,42 @@ export function hotelOrderForTrip(bookings: readonly Booking[]): string[] {
 }
 
 /**
+ * Chronologically-ordered list of distinct cities the traveller stays in,
+ * derived from hotel bookings in startAt order. Used together with
+ * colorForCity to assign stable per-trip city colours for the calendar strip.
+ *
+ * If two hotels are in the same city they share one slot here (and therefore
+ * one colour), unlike hotelOrderForTrip which gives each hotel its own slot.
+ */
+export function cityOrderForTrip(bookings: readonly Booking[]): string[] {
+  const seen = new Set<string>()
+  const cities: string[] = []
+  const sorted = [...bookings]
+    .filter((b) => b.type === 'hotel')
+    .sort((a, b) => a.startAt.getTime() - b.startAt.getTime())
+  for (const b of sorted) {
+    const city = cityForBooking(b)
+    if (city && !seen.has(city)) {
+      seen.add(city)
+      cities.push(city)
+    }
+  }
+  return cities
+}
+
+/**
+ * Stable colour for a given city within the trip, using the chronological
+ * cityOrder list to index into the palette. Returns the first palette colour
+ * if the city isn't in the list (defensive fallback — shouldn't happen in
+ * practice).
+ */
+export function colorForCity(city: string, citiesInOrder: string[], palette: PaletteSpec): string {
+  const idx = citiesInOrder.indexOf(city)
+  const safe = idx < 0 ? 0 : idx
+  return palette.colors[safe % palette.colors.length]
+}
+
+/**
  * Strip the room-type / suite descriptor that comes after an en-dash or em-dash
  * in many hotel booking titles. "Galaxy Boutique Hotel – Two-Bedroom Lake View
  * Suite" → "Galaxy Boutique Hotel".
