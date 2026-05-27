@@ -936,6 +936,51 @@ export async function editBooking(formData: FormData): Promise<EditBookingResult
   return { ok: true, tripSlug: existing.trip.slug }
 }
 
+// ----- Atlas: manually-added visited countries --------------------------------------
+
+/**
+ * Add a "I've been there" record for the Atlas. Upserts on (userId, isoNumeric)
+ * so resubmitting with new fields updates an existing record rather than failing.
+ */
+export async function addVisitedCountry(formData: FormData): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const user = await requireUser()
+  const isoNumeric = String(formData.get('isoNumeric') ?? '').trim()
+  if (!isoNumeric) return { ok: false, error: 'Pick a country.' }
+
+  const daysRaw = String(formData.get('daysApprox') ?? '').trim()
+  const yearRaw = String(formData.get('yearVisited') ?? '').trim()
+  const note = String(formData.get('note') ?? '').trim() || null
+
+  const daysApprox = daysRaw ? Math.max(1, parseInt(daysRaw, 10)) : null
+  const yearVisited = yearRaw ? Math.max(1900, Math.min(2100, parseInt(yearRaw, 10))) : null
+
+  if (daysRaw && Number.isNaN(daysApprox!)) return { ok: false, error: 'Days must be a number.' }
+  if (yearRaw && Number.isNaN(yearVisited!)) return { ok: false, error: 'Year must be a number.' }
+
+  await prisma.visitedCountry.upsert({
+    where: { userId_isoNumeric: { userId: user.id, isoNumeric } },
+    create: { userId: user.id, isoNumeric, daysApprox, yearVisited, note },
+    update: { daysApprox, yearVisited, note },
+  })
+
+  revalidatePath('/atlas')
+  return { ok: true }
+}
+
+export async function deleteVisitedCountry(formData: FormData) {
+  const user = await requireUser()
+  const isoNumeric = String(formData.get('isoNumeric') ?? '').trim()
+  if (!isoNumeric) return
+
+  await prisma.visitedCountry.deleteMany({
+    where: { userId: user.id, isoNumeric },
+  })
+
+  revalidatePath('/atlas')
+}
+
 // ----- Deletes ----------------------------------------------------------------------
 
 export async function deleteTrip(formData: FormData) {

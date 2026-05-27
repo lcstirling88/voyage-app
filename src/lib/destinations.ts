@@ -119,6 +119,39 @@ const FALLBACK: Omit<DestinationProfile, 'matchers'> = {
   label: 'Unknown',
 }
 
+/** Look up a destination profile by ISO 3166-1 numeric code. */
+export function profileForIsoNumeric(isoNumeric: string): Omit<DestinationProfile, 'matchers'> | null {
+  const p = PROFILES.find((p) => p.isoNumeric === isoNumeric)
+  if (!p) return null
+  return {
+    timezone: p.timezone,
+    currency: p.currency,
+    label: p.label,
+    heroImage: p.heroImage,
+    isoNumeric: p.isoNumeric,
+    passportIcon: p.passportIcon,
+  }
+}
+
+/**
+ * All known destinations (without their matchers), for use in dropdown
+ * pickers — e.g. the "I've been here" form on the Atlas page.
+ * Sorted alphabetically by label for stable UI ordering.
+ */
+export function listDestinations(): Array<Omit<DestinationProfile, 'matchers'>> {
+  return PROFILES
+    .filter((p) => p.isoNumeric)
+    .map((p) => ({
+      timezone: p.timezone,
+      currency: p.currency,
+      label: p.label,
+      heroImage: p.heroImage,
+      isoNumeric: p.isoNumeric,
+      passportIcon: p.passportIcon,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
 export function profileForDestination(destination: string | null | undefined): Omit<DestinationProfile, 'matchers'> {
   if (!destination) return FALLBACK
   for (const p of PROFILES) {

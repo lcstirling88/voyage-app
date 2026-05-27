@@ -27,7 +27,11 @@ export function WorldMapSvg({
 }) {
   return (
     <svg
-      viewBox={`0 0 ${ATLAS_VIEW_WIDTH} ${ATLAS_VIEW_HEIGHT}`}
+      // Crop the empty polar / high-ocean bands top and bottom — gives the
+      // SVG a ~2.33:1 aspect ratio, much closer to a landscape phone's
+      // viewport (~2.17:1) so the full-screen route fills the screen with
+      // minimal letterboxing when the user rotates their phone.
+      viewBox={`0 30 ${ATLAS_VIEW_WIDTH} ${ATLAS_VIEW_HEIGHT - 60}`}
       className={className}
       role="img"
       aria-label={ariaLabel ?? 'World map highlighting countries you have trips in'}

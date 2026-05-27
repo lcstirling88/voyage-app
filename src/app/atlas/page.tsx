@@ -8,14 +8,17 @@
 
 import Link from 'next/link'
 import { startOfDay, format } from 'date-fns'
-import { Globe, Sparkles, Crown, Maximize2 } from 'lucide-react'
+import { Globe, Sparkles, Crown, Maximize2, MapPin } from 'lucide-react'
 import { requireUser } from '@/lib/session'
 import {
   loadAtlasForUser, renderHintsFromCountries, tierForDays,
   LIVED_EDGE_COLOR,
-  type AtlasCountrySummary,
+  type AtlasCountrySummary, type AtlasManualVisit,
 } from '@/lib/atlas'
+import { listDestinations } from '@/lib/destinations'
 import { WorldMapSvg } from '@/components/WorldMapSvg'
+import { AddVisitedCountryClient } from '@/components/AddVisitedCountryClient'
+import { deleteVisitedCountry } from '@/lib/actions'
 
 function twemojiUrl(emoji: string): string {
   const codepoints = [...emoji]
@@ -28,9 +31,14 @@ function twemojiUrl(emoji: string): string {
 
 export default async function AtlasPage() {
   const user = await requireUser()
-  const { countries, totalDays, totalTrips } = await loadAtlasForUser(user.id)
+  const { countries, totalDays, totalTrips, manualByIso } = await loadAtlasForUser(user.id)
   const renderHints = renderHintsFromCountries(countries)
   const totalCountries = countries.length
+  const destinationOptions = listDestinations().map((d) => ({
+    isoNumeric: d.isoNumeric!,
+    label: d.label,
+    passportIcon: d.passportIcon,
+  }))
 
   return (
     <>
@@ -87,18 +95,28 @@ export default async function AtlasPage() {
       </section>
 
       <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-3xl space-y-4">
-        {countries.length === 0 ? (
+        {countries.length === 0 && (
           <div className="border border-line rounded-xl bg-paper-pure p-8 sm:p-10 text-center">
             <Sparkles className="w-6 h-6 text-sage mx-auto mb-3" />
             <h2 className="font-display text-2xl mb-2">An empty map is a beginning.</h2>
             <p className="text-sm text-ink-muted max-w-md mx-auto mb-5">
-              Once you create your first trip, the country lights up on the map above and a card appears down here with your days, dates, and a little keepsake icon.
+              Plan a trip, or add a country below for somewhere you&apos;ve already been.
             </p>
             <Link href="/trips/new" className="btn-ink">Plan a trip</Link>
           </div>
-        ) : (
-          countries.map((c) => <CountryCard key={c.isoNumeric} country={c} />)
         )}
+
+        {countries.map((c) => (
+          <CountryCard
+            key={c.isoNumeric}
+            country={c}
+            manualVisit={manualByIso.get(c.isoNumeric) ?? null}
+          />
+        ))}
+
+        {/* Form to add a country you've already been to. Always visible at the
+            bottom of the list so the map can keep filling in over time. */}
+        <AddVisitedCountryClient options={destinationOptions} />
       </div>
     </>
   )
@@ -127,7 +145,12 @@ function LegendSwatch({
   )
 }
 
-function CountryCard({ country }: { country: AtlasCountrySummary }) {
+function CountryCard({
+  country, manualVisit,
+}: {
+  country: AtlasCountrySummary
+  manualVisit: AtlasManualVisit | null
+}) {
   const tier = country.completedDays > 0 ? tierForDays(country.completedDays) : null
   const isRepeatVisitor = country.tripCount >= 2
 
@@ -200,6 +223,31 @@ function CountryCard({ country }: { country: AtlasCountrySummary }) {
               </span>
             </Link>
           ))}
+
+          {manualVisit && (
+            <div className="flex items-center gap-2 text-sm -mx-2 px-2 py-1 rounded">
+              <MapPin className="w-3 h-3 text-ink-muted shrink-0" />
+              <span className="flex-1 min-w-0 truncate text-ink-soft italic">
+                {manualVisit.note ?? 'Visited (no plan in app)'}
+              </span>
+              {manualVisit.yearVisited != null && (
+                <span className="text-xs text-ink-muted shrink-0 num-mono">
+                  {manualVisit.yearVisited}
+                </span>
+              )}
+              <form action={deleteVisitedCountry}>
+                <input type="hidden" name="isoNumeric" value={country.isoNumeric} />
+                <button
+                  type="submit"
+                  className="text-[10px] uppercase tracking-[0.18em] text-ink-muted hover:text-rust ml-1 ulink"
+                  title="Remove this manual entry"
+                  aria-label="Remove manual entry"
+                >
+                  Remove
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -21,10 +21,29 @@ model User {
   image         String?
   createdAt     DateTime  @default(now())
 
-  accounts    Account[]
-  sessions    Session[]
-  memberships Membership[]
-  invitesSent Invitation[] @relation("InvitesSent")
+  accounts         Account[]
+  sessions         Session[]
+  memberships      Membership[]
+  invitesSent      Invitation[]      @relation("InvitesSent")
+  visitedCountries VisitedCountry[]
+}
+
+// User-added "I've been there" records for the Atlas — for trips taken
+// before they joined Voyage, or short visits they didn't plan in the app.
+// One row per (user, country); editing happens by upserting on isoNumeric.
+model VisitedCountry {
+  id           String   @id @default(cuid())
+  userId       String
+  isoNumeric   String   // ISO 3166-1 numeric, matches the destinations registry
+  daysApprox   Int?     // optional rough days, counts toward Atlas tier rank
+  yearVisited  Int?     // optional rough year, just for display on the card
+  note         String?  // free-text memory, optional
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, isoNumeric])
+  @@index([userId])
 }
 
 model Account {

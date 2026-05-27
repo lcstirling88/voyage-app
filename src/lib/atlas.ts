@@ -77,22 +77,35 @@ export const LIVED_EDGE_COLOR = '#A8814B'
 
 import { differenceInDays, startOfDay } from 'date-fns'
 import { prisma } from './db'
-import { profileForDestination } from './destinations'
+import { profileForDestination, profileForIsoNumeric } from './destinations'
+
+export type AtlasManualVisit = {
+  id: string
+  daysApprox: number | null
+  yearVisited: number | null
+  note: string | null
+}
 
 export async function loadAtlasForUser(userId: string): Promise<{
   countries: AtlasCountrySummary[]
   totalDays: number
   totalTrips: number
+  manualByIso: Map<string, AtlasManualVisit>
 }> {
-  const memberships = await prisma.membership.findMany({
-    where: { userId },
-    include: { trip: true },
-    orderBy: { trip: { startDate: 'asc' } },
-  })
+  const [memberships, visited] = await Promise.all([
+    prisma.membership.findMany({
+      where: { userId },
+      include: { trip: true },
+      orderBy: { trip: { startDate: 'asc' } },
+    }),
+    prisma.visitedCountry.findMany({ where: { userId } }),
+  ])
   const trips = memberships.map((m) => m.trip)
 
   const today = startOfDay(new Date())
   const byCountry = new Map<string, AtlasCountrySummary>()
+  const manualByIso = new Map<string, AtlasManualVisit>()
+
   for (const trip of trips) {
     const profile = profileForDestination(trip.destination)
     if (!profile.isoNumeric) continue
@@ -127,6 +140,41 @@ export async function loadAtlasForUser(userId: string): Promise<{
     }
   }
 
+  // Merge in manually-added visits. Each one counts as 1 trip + its declared
+  // days (1 if unspecified). Manual visits are always completed (they're "I've
+  // been there", not "I'm planning to go").
+  for (const v of visited) {
+    manualByIso.set(v.isoNumeric, {
+      id: v.id,
+      daysApprox: v.daysApprox,
+      yearVisited: v.yearVisited,
+      note: v.note,
+    })
+    const profile = profileForIsoNumeric(v.isoNumeric)
+    const label = profile?.label ?? v.isoNumeric
+    const passportIcon = profile?.passportIcon ?? null
+    const days = Math.max(1, v.daysApprox ?? 1)
+    const existing = byCountry.get(v.isoNumeric)
+    if (existing) {
+      existing.totalDays += days
+      existing.completedDays += days
+      existing.tripCount += 1
+      existing.hasCompleted = true
+    } else {
+      byCountry.set(v.isoNumeric, {
+        isoNumeric: v.isoNumeric,
+        label,
+        passportIcon,
+        totalDays: days,
+        completedDays: days,
+        tripCount: 1,
+        hasCompleted: true,
+        hasUpcoming: false,
+        trips: [],
+      })
+    }
+  }
+
   const countries = [...byCountry.values()].sort((a, b) => {
     if (a.hasCompleted !== b.hasCompleted) return a.hasCompleted ? -1 : 1
     if (a.completedDays !== b.completedDays) return b.completedDays - a.completedDays
@@ -137,6 +185,7 @@ export async function loadAtlasForUser(userId: string): Promise<{
     countries,
     totalDays: countries.reduce((s, c) => s + c.totalDays, 0),
     totalTrips: trips.length,
+    manualByIso,
   }
 }
 
