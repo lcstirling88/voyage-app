@@ -302,7 +302,9 @@ export async function getTripWeather(
     isCoastal,
     swellM,
     days,
-    weeks: bucketIntoWeeks(days, isCoastal ? swellM : null),
+    // Swell is a single representative reading, not per-week data — surface it
+    // once in the page header rather than repeating it on every week card.
+    weeks: bucketIntoWeeks(days, null),
     insights: buildInsights(days, isCoastal, swellM),
   }
 }

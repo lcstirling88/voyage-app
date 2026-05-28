@@ -54,7 +54,9 @@ export default async function WeatherPage({ params }: { params: Promise<{ tripSl
               {weather.isCoastal && (
                 <>
                   <span className="text-ink-muted/40">·</span>
-                  <span className="inline-flex items-center gap-1"><Waves className="w-3.5 h-3.5" /> Coastal</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Waves className="w-3.5 h-3.5" /> Coastal{weather.swellM != null ? ` · ~${weather.swellM}m swell` : ''}
+                  </span>
                 </>
               )}
             </>
