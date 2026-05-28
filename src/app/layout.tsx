@@ -43,8 +43,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${inter.variable} ${jetbrains.variable} h-full antialiased`}>
-      <body className="min-h-full">{children}</body>
+    // NOTE: do NOT pin <html> to height:100% (e.g. `h-full`). In an installed
+    // PWA (iOS standalone), a fixed-height root clips the document and content
+    // below the first viewport becomes unscrollable. Let the body grow with the
+    // dynamic viewport instead (min-h-dvh) so long pages scroll fully.
+    <html lang="en" className={`${fraunces.variable} ${inter.variable} ${jetbrains.variable} antialiased`}>
+      <body className="min-h-dvh pb-[env(safe-area-inset-bottom)]">{children}</body>
     </html>
   )
 }
