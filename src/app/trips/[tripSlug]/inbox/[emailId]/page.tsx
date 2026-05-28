@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ChevronLeft, Mail, AlertTriangle, Check, Clock, Paperclip, FileText } from 'lucide-react'
+import { ChevronLeft, Mail, AlertTriangle, Check, Clock, Paperclip, FileText, ExternalLink } from 'lucide-react'
 import { format } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
@@ -21,7 +21,7 @@ export default async function EmailDetailPage({
       trip: true,
       bookings: { select: { id: true, title: true, type: true, startAt: true } },
       documents: { select: { id: true, title: true, category: true } },
-      attachments: { select: { id: true, filename: true, mimeType: true, size: true } },
+      attachments: { select: { id: true, filename: true, mimeType: true, size: true, storagePath: true } },
     },
   })
   if (!email || email.trip?.slug !== tripSlug) notFound()
@@ -156,14 +156,32 @@ export default async function EmailDetailPage({
             </div>
           ) : (
             <ul className="space-y-1.5 text-sm">
-              {email.attachments.map((a) => (
-                <li key={a.id} className="flex items-center gap-3">
-                  <FileText className="w-3.5 h-3.5 text-ink-muted shrink-0" />
-                  <span className="flex-1 min-w-0 truncate">{a.filename}</span>
-                  <span className="text-[10px] num-mono text-ink-muted shrink-0">{a.mimeType}</span>
-                  <span className="text-[10px] num-mono text-ink-muted shrink-0">{(a.size / 1024).toFixed(0)}KB</span>
-                </li>
-              ))}
+              {email.attachments.map((a) => {
+                const hasFile = Boolean(a.storagePath)
+                const inner = (
+                  <>
+                    <FileText className={`w-3.5 h-3.5 shrink-0 ${hasFile ? 'text-sage' : 'text-ink-muted'}`} />
+                    <span className={`flex-1 min-w-0 truncate ${hasFile ? 'group-hover:text-sage' : ''}`}>{a.filename}</span>
+                    <span className="text-[10px] num-mono text-ink-muted shrink-0 hidden sm:inline">{a.mimeType}</span>
+                    <span className="text-[10px] num-mono text-ink-muted shrink-0">{(a.size / 1024).toFixed(0)}KB</span>
+                    {hasFile && <ExternalLink className="w-3.5 h-3.5 text-ink-muted/60 group-hover:text-sage shrink-0" />}
+                  </>
+                )
+                return hasFile ? (
+                  <li key={a.id}>
+                    <a
+                      href={a.storagePath}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex items-center gap-3 -mx-2 px-2 py-1 rounded hover:bg-line-soft/40 transition"
+                    >
+                      {inner}
+                    </a>
+                  </li>
+                ) : (
+                  <li key={a.id} className="flex items-center gap-3">{inner}</li>
+                )
+              })}
             </ul>
           )}
 

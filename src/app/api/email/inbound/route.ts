@@ -23,6 +23,7 @@ import PostalMime from 'postal-mime'
 import { prisma } from '@/lib/db'
 import { parseEmail, type EmailInput, type EmailAttachmentInput } from '@/lib/email-parser'
 import { persistParserResult } from '@/lib/ingest'
+import { uploadAttachment } from '@/lib/blob'
 
 type PostmarkAttachment = {
   Name: string
@@ -206,16 +207,33 @@ export async function POST(req: NextRequest) {
     },
   })
 
+  // Upload attachments that actually have bytes to Blob (only for routed
+  // emails — no point storing files for spam we can't attribute to a trip).
+  // Map filename → URL so the persisted rows below can carry the link.
+  const urlByFilename = new Map<string, string>()
+  if (trip && email.attachments.length > 0) {
+    for (const a of email.attachments) {
+      const url = await uploadAttachment({
+        tripSlug: trip.slug,
+        filename: a.filename,
+        bytes: Buffer.from(a.contentBase64, 'base64'),
+        mimeType: a.mimeType,
+      })
+      if (url) urlByFilename.set(a.filename, url)
+    }
+  }
+
   // Persist all reported attachments (including 0-byte ones) so the email
   // detail page shows what the worker saw — useful for diagnosing missing
-  // content vs. no attachment at all.
+  // content vs. no attachment at all. storagePath holds the Blob URL when
+  // we managed to store the bytes.
   if (email.reportedAttachments.length > 0) {
     await prisma.emailAttachment.createMany({
       data: email.reportedAttachments.map((a) => ({
         emailId: incoming.id,
         filename: a.filename,
         mimeType: a.mimeType,
-        storagePath: '',
+        storagePath: urlByFilename.get(a.filename) ?? '',
         size: a.size,
       })),
     })

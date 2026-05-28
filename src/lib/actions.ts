@@ -12,6 +12,7 @@ import { deriveThemeFromDestination, type ThemeKey } from './theme'
 import { requireUser, requireTripAccess } from './session'
 import { getAnthropic, PARSER_MODEL } from './anthropic'
 import { profileForDestination } from './destinations'
+import { uploadAttachment } from './blob'
 
 // ----- Trip creation ----------------------------------------------------------------
 
@@ -574,15 +575,19 @@ export async function ingestPastedEmail(formData: FormData) {
   })
 
   if (attachments.length > 0) {
-    await prisma.emailAttachment.createMany({
-      data: attachments.map((a) => ({
-        emailId: incoming.id,
+    const rows = await Promise.all(attachments.map(async (a) => ({
+      emailId: incoming.id,
+      filename: a.filename,
+      mimeType: a.mimeType,
+      storagePath: (await uploadAttachment({
+        tripSlug: trip.slug,
         filename: a.filename,
+        bytes: Buffer.from(a.contentBase64, 'base64'),
         mimeType: a.mimeType,
-        storagePath: '',
-        size: Math.floor(a.contentBase64.length * 0.75),
-      })),
-    })
+      })) ?? '',
+      size: Math.floor(a.contentBase64.length * 0.75),
+    })))
+    await prisma.emailAttachment.createMany({ data: rows })
   }
 
   let parsed: ParserResult
@@ -660,16 +665,21 @@ export async function reparseEmailWithFiles(formData: FormData): Promise<Reparse
     }))
   )
 
-  // Record the freshly uploaded attachments alongside whatever was already attached
-  await prisma.emailAttachment.createMany({
-    data: attachments.map((a) => ({
-      emailId: email.id,
+  // Record the freshly uploaded attachments alongside whatever was already
+  // attached, persisting the bytes to Blob so they're openable later.
+  const attachmentRows = await Promise.all(attachments.map(async (a) => ({
+    emailId: email.id,
+    filename: a.filename,
+    mimeType: a.mimeType,
+    storagePath: (await uploadAttachment({
+      tripSlug: email.trip!.slug,
       filename: a.filename,
+      bytes: Buffer.from(a.contentBase64, 'base64'),
       mimeType: a.mimeType,
-      storagePath: '',
-      size: Math.floor(a.contentBase64.length * 0.75),
-    })),
-  })
+    })) ?? '',
+    size: Math.floor(a.contentBase64.length * 0.75),
+  })))
+  await prisma.emailAttachment.createMany({ data: attachmentRows })
 
   let parsed: ParserResult
   try {
