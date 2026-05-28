@@ -374,7 +374,7 @@ function HotelCheckinCard({ booking, time, tripSlug }: { booking: Booking; time:
       {booking.address && <p className="text-xs text-ink-muted mt-1">{booking.address}</p>}
 
       {/* Detail row — full card width, check-out lives on the check-out card */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4 mt-3 text-xs">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 mt-3 text-xs">
         <div>
           <div className="text-ink-muted">Check-in</div>
           <div className="font-medium mt-0.5">{formatTime(meta.checkIn, '—')}</div>

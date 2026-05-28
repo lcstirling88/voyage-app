@@ -54,7 +54,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ trip
             <h2 className="font-display text-2xl">Travel</h2>
             <span className="text-xs text-ink-muted">{travelDocs.length} items</span>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {travelDocs.map((d) => {
               const Icon = categoryIcon(d.category)
               return (
@@ -85,7 +85,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ trip
             <h2 className="font-display text-2xl">Bookings &amp; vouchers</h2>
             <span className="text-xs text-ink-muted">{bookingDocs.length} items</span>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {bookingDocs.map((d) => {
               const Icon = categoryIcon(d.category)
               return (

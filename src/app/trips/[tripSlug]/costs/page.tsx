@@ -74,7 +74,7 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
           <div className="border border-line rounded-xl bg-paper-pure p-6">
             <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Total trip cost</div>
-            <div className="font-display text-5xl mt-2">{fmtMoney(totalBudget, trip.homeCurrency)} <span className="text-sm text-ink-muted num-mono">{trip.homeCurrency}</span></div>
+            <div className="font-display text-3xl sm:text-4xl md:text-5xl mt-2">{fmtMoney(totalBudget, trip.homeCurrency)} <span className="text-sm text-ink-muted num-mono">{trip.homeCurrency}</span></div>
             <div className="h-1 bg-line-soft rounded-full mt-5 overflow-hidden">
               <div className="h-full bg-sage" style={{ width: `${paidPct}%` }} />
             </div>
@@ -85,7 +85,7 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
           </div>
           <div className="border border-line rounded-xl bg-paper-pure p-6">
             <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Cost per day</div>
-            <div className="font-display text-5xl mt-2">{fmtMoney(Math.round(perDay), trip.homeCurrency)}</div>
+            <div className="font-display text-3xl sm:text-4xl md:text-5xl mt-2">{fmtMoney(Math.round(perDay), trip.homeCurrency)}</div>
             <div className="text-xs text-ink-muted mt-2">across {Math.round(days)} days, {pax} travellers</div>
             <div className="mt-5 text-xs space-y-1">
               <div className="flex justify-between"><span className="text-ink-muted">Per person / day</span><span className="num-mono">{fmtMoney(Math.round(perDay / pax), trip.homeCurrency)}</span></div>
@@ -93,7 +93,7 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
           </div>
           <div className="border border-line rounded-xl bg-paper-pure p-6">
             <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Daily food budget left</div>
-            <div className="font-display text-5xl mt-2">$120 <span className="text-sm text-ink-muted">/ day</span></div>
+            <div className="font-display text-3xl sm:text-4xl md:text-5xl mt-2">$120 <span className="text-sm text-ink-muted">/ day</span></div>
             <div className="text-xs text-ink-muted mt-2">excludes pre-booked meals</div>
             <button className="mt-5 text-xs ulink text-sage font-medium">Log a meal expense →</button>
           </div>
