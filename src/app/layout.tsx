@@ -48,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // below the first viewport becomes unscrollable. Let the body grow with the
     // dynamic viewport instead (min-h-dvh) so long pages scroll fully.
     <html lang="en" className={`${fraunces.variable} ${inter.variable} ${jetbrains.variable} antialiased`}>
-      <body className="min-h-dvh pb-[env(safe-area-inset-bottom)]">{children}</body>
+      <body className="min-h-dvh">{children}</body>
     </html>
   )
 }
