@@ -94,11 +94,18 @@ export default async function WeatherPage({ params }: { params: Promise<{ tripSl
                 {days.map((d) => {
                   const info = weatherCodeToInfo(d.code)
                   const isWarm = warmest && d.date === warmest.date
+                  // Historical/"typical" days get a greyed, dashed-edge card so
+                  // they read clearly as an estimate rather than a real forecast.
+                  const typical = weather.mode === 'typical'
+                  const cardCls = [
+                    'border rounded-xl p-4 text-center',
+                    typical ? 'bg-line-soft/60' : 'bg-paper-pure',
+                    isWarm
+                      ? 'border-gold border-2 relative'
+                      : typical ? 'border-dashed border-line' : 'border-line',
+                  ].join(' ')
                   return (
-                    <div
-                      key={d.date}
-                      className={`border rounded-xl bg-paper-pure p-4 text-center ${isWarm ? 'border-gold border-2 relative' : 'border-line'}`}
-                    >
+                    <div key={d.date} className={cardCls}>
                       {isWarm && (
                         <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.18em] bg-gold text-paper-pure px-2 py-0.5 rounded-full">
                           Warmest
