@@ -125,7 +125,7 @@ export default async function ChecklistPage({ params }: { params: Promise<{ trip
             <div className="flex items-center gap-2 text-wine text-xs uppercase tracking-[0.18em] mb-3">
               <Sparkles className="w-4 h-4" /> Itinera suggests
             </div>
-            <p className="text-sm">You&apos;re going to walk a lot — travellers average <strong>22,000 steps/day</strong> in Kyoto. Worth adding insoles or a second pair of shoes.</p>
+            <p className="text-sm">You&apos;ll likely walk far more than a normal day while sightseeing. Pack <strong>comfortable, broken-in shoes</strong> — and maybe insoles or a spare pair so a blister doesn&apos;t cost you an afternoon.</p>
           </section>
         </div>
       </div>

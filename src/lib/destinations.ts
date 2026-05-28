@@ -361,3 +361,56 @@ export function fxLabel(homeCurrency: string, localCurrency: string): string {
                   : rate.toFixed(2)
   return `1 ${homeCurrency} = ${formatted} ${localCurrency}`
 }
+
+// ----- Currency presentation helpers ------------------------------------------------
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$', AUD: '$', NZD: '$', CAD: '$', SGD: '$', HKD: '$', MXN: '$',
+  ARS: '$', CLP: '$', COP: '$', CRC: '₡', CUP: '$', FJD: '$', BRL: 'R$',
+  EUR: '€', GBP: '£', CHF: 'Fr',
+  JPY: '¥', CNY: '¥', KRW: '₩', INR: '₹', THB: '฿', VND: '₫', PHP: '₱',
+  IDR: 'Rp', MYR: 'RM', TWD: 'NT$', LKR: 'Rs', NPR: 'Rs', MVR: '.ރ',
+  KHR: '៛', LAK: '₭', MMK: 'K',
+  AED: 'د.إ', ILS: '₪', JOD: 'JD',
+  ISK: 'kr', CZK: 'Kč', HUF: 'Ft', NOK: 'kr', SEK: 'kr', DKK: 'kr',
+  PLN: 'zł', TRY: '₺',
+  ZAR: 'R', MAD: 'DH', EGP: 'E£', KES: 'KSh', TZS: 'TSh', NAD: '$', ETB: 'Br',
+  PGK: 'K', WST: '$', TOP: 'T$', XPF: '₣',
+}
+
+/** Currency symbol for a code (falls back to the code itself). */
+export function currencySymbol(code: string | null | undefined): string {
+  if (!code) return '$'
+  return CURRENCY_SYMBOLS[code.toUpperCase()] ?? code.toUpperCase()
+}
+
+// Currencies that conventionally have no minor units (no cents).
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  'JPY', 'KRW', 'VND', 'IDR', 'CLP', 'COP', 'HUF', 'ISK', 'LAK', 'MMK',
+  'KHR', 'PYG', 'XPF', 'TZS', 'UGX', 'RWF', 'XAF', 'XOF',
+])
+
+/** How many decimal places to show for a currency (0 for yen/won/etc, else 2). */
+export function currencyDecimals(code: string | null | undefined): number {
+  if (!code) return 2
+  return ZERO_DECIMAL_CURRENCIES.has(code.toUpperCase()) ? 0 : 2
+}
+
+function niceRound(n: number): number {
+  if (n >= 10000) return Math.round(n / 1000) * 1000
+  if (n >= 1000) return Math.round(n / 500) * 500
+  if (n >= 100) return Math.round(n / 50) * 50
+  if (n >= 10) return Math.round(n / 5) * 5
+  return Math.max(1, Math.round(n))
+}
+
+/**
+ * Destination-appropriate quick-amount chips for the currency converter.
+ * Scales a set of ~USD reference amounts into the local currency and rounds
+ * to clean numbers, so a Japan trip offers ¥1,500 / ¥3,500 / ¥7,500 / ¥15,000
+ * while a NZ trip offers $15 / $40 / $85 / $150.
+ */
+export function currencyQuickAmounts(code: string | null | undefined): number[] {
+  const perUsd = code ? (FX_PER_USD[code.toUpperCase()] ?? 1) : 1
+  return [10, 25, 50, 100].map((usd) => niceRound(usd * perUsd))
+}

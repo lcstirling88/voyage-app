@@ -2,9 +2,13 @@ import { notFound } from 'next/navigation'
 import { HandCoins, Plug, Banknote, Wifi, AlertOctagon, LifeBuoy } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
-import { CurrencyConverterClient } from '@/components/CurrencyConverterClient'
+import { CurrencyConverterClient, type ConversionTarget } from '@/components/CurrencyConverterClient'
 import { GenerateLocalInfoClient } from '@/components/GenerateLocalInfoClient'
 import { safeParseLocalInfo } from '@/lib/local-info'
+import {
+  profileForDestination, convertCurrency, currencySymbol,
+  currencyDecimals, currencyQuickAmounts,
+} from '@/lib/destinations'
 
 export default async function LocalPage({ params }: { params: Promise<{ tripSlug: string }> }) {
   const { tripSlug } = await params
@@ -13,6 +17,23 @@ export default async function LocalPage({ params }: { params: Promise<{ tripSlug
   if (!trip) notFound()
 
   const info = safeParseLocalInfo(trip.localInfoJson)
+
+  // Currency converter inputs — driven by the trip's actual destination, not
+  // a hardcoded JPY assumption. Local currency comes from the trip (set at
+  // create time from the destination profile); falls back to the profile.
+  const localCurrency = trip.localCurrency ?? profileForDestination(trip.destination).currency ?? 'USD'
+  const homeCurrency = trip.homeCurrency || 'AUD'
+  // Build conversion targets: home first (highlighted), then up to 3 other
+  // majors, skipping any that equal the local or home currency.
+  const otherMajors = ['USD', 'EUR', 'GBP', 'AUD', 'NZD']
+    .filter((c) => c !== homeCurrency && c !== localCurrency)
+    .slice(0, 3)
+  const conversions: ConversionTarget[] = [homeCurrency, ...otherMajors].map((code) => ({
+    code,
+    symbol: currencySymbol(code),
+    rate: convertCurrency(1, localCurrency, code),
+    decimals: currencyDecimals(code),
+  }))
 
   return (
     <>
@@ -33,7 +54,13 @@ export default async function LocalPage({ params }: { params: Promise<{ tripSlug
             <h3 className="font-display text-2xl">Currency converter</h3>
             <div className="text-xs text-ink-muted num-mono">Static rates · live in v2</div>
           </div>
-          <CurrencyConverterClient homeCurrency={trip.homeCurrency} />
+          <CurrencyConverterClient
+            localCurrency={localCurrency}
+            localSymbol={currencySymbol(localCurrency)}
+            localDecimals={currencyDecimals(localCurrency)}
+            quickAmounts={currencyQuickAmounts(localCurrency)}
+            conversions={conversions}
+          />
           {info?.ruleOfThumbCurrency && (
             <div className="mt-5 pt-5 border-t border-line text-xs text-ink-muted">
               <span className="font-medium text-ink">Rule of thumb:</span> {info.ruleOfThumbCurrency}
