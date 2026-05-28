@@ -2,27 +2,27 @@ import { Search, Plus } from 'lucide-react'
 import type { Trip } from '@prisma/client'
 import { LocalClockClient } from './LocalClockClient'
 import { TopBarBreadcrumb } from './TopBarClient'
-import { profileForDestination } from '@/lib/destinations'
 import { timezoneForCity, labelFromTimezone } from '@/lib/cities'
+import { getTripSegments, activeSegment } from '@/lib/segments'
 
 /**
  * Sticky top bar on every trip page: breadcrumb on the left, two clocks +
- * search + add on the right. The two clocks are "home" (the trip's
- * departure city) and "destination" (the trip's country), giving the
- * user an at-a-glance feel for both timezones without leaving the trip.
+ * search + add on the right. The two clocks are "home" (the trip's departure
+ * city) and "destination". On a multi-country trip the destination clock
+ * follows the ACTIVE leg — where you are right now (or the next leg before
+ * departure) — so the timezone tracks you across the trip.
  *
  * FX/currency conversion used to live here too — moved out so the bar
  * stays focused on time. Currency belongs on the Costs feature page.
  */
-export function TopBar({ trip }: { trip: Trip }) {
-  const profile = profileForDestination(trip.destination)
-
-  // Destination clock — trip.timezone if set, otherwise the profile's default.
-  const destTimezone = trip.timezone && trip.timezone !== 'UTC' ? trip.timezone : profile.timezone
-  const destLabel = labelFromTimezone(
-    destTimezone,
-    profile.label !== 'Unknown' ? profile.label : trip.destination,
-  )
+export async function TopBar({ trip }: { trip: Trip }) {
+  // Destination clock — driven by the active trip leg (handles multi-country).
+  const segments = await getTripSegments(trip)
+  const active = activeSegment(segments)
+  const destTimezone = active?.timezone && active.timezone !== 'UTC'
+    ? active.timezone
+    : (trip.timezone && trip.timezone !== 'UTC' ? trip.timezone : 'UTC')
+  const destLabel = labelFromTimezone(destTimezone, active?.country ?? trip.destination)
 
   // Home clock — derived from the trip's departure city. If unknown, hide it.
   const homeTimezone = timezoneForCity(trip.departureCity)

@@ -124,6 +124,7 @@ model Trip {
   updatedAt     DateTime @updatedAt
 
   cities         City[]
+  segments       TripSegment[]
   bookings       Booking[]
   documents      Document[]
   payments       Payment[]
@@ -131,6 +132,26 @@ model Trip {
   emails         IncomingEmail[]
   memberships    Membership[]
   invitations    Invitation[]
+}
+
+// A leg of a multi-country trip: one country with its own date range. Trips
+// with no segments are treated as a single implicit leg derived from
+// Trip.destination, so existing single-country trips keep working unchanged.
+// Powers per-leg adaptation (clock, currency, weather) and per-country
+// aggregation (visa, local info, packing).
+model TripSegment {
+  id           String   @id @default(cuid())
+  tripId       String
+  country      String   // friendly label, e.g. "Japan"
+  isoNumeric   String?  // ISO 3166-1 numeric, for profile/flag lookup
+  startDate    DateTime
+  endDate      DateTime
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
 }
 
 model Membership {

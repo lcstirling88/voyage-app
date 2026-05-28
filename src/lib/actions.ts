@@ -11,7 +11,7 @@ import { persistParserResult } from './ingest'
 import { deriveThemeFromDestination, type ThemeKey } from './theme'
 import { requireUser, requireTripAccess } from './session'
 import { getAnthropic, PARSER_MODEL } from './anthropic'
-import { profileForDestination } from './destinations'
+import { profileForDestination, profileForIsoNumeric } from './destinations'
 import { uploadAttachment } from './blob'
 
 // ----- Trip creation ----------------------------------------------------------------
@@ -1012,6 +1012,46 @@ export async function setHomeCountry(formData: FormData): Promise<
   revalidatePath('/atlas')
   revalidatePath('/atlas/map')
   return { ok: true }
+}
+
+// ----- Trip segments (multi-country legs) -------------------------------------------
+
+export type AddSegmentResult = { ok: true } | { ok: false; error: string }
+
+export async function addTripSegment(formData: FormData): Promise<AddSegmentResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '').trim()
+  if (!tripSlug) return { ok: false, error: 'Missing trip.' }
+  const { trip } = await requireTripAccess(tripSlug)
+
+  const isoNumeric = String(formData.get('isoNumeric') ?? '').trim()
+  if (!isoNumeric) return { ok: false, error: 'Pick a country.' }
+  const startStr = String(formData.get('startDate') ?? '')
+  const endStr = String(formData.get('endDate') ?? '')
+  if (!startStr || !endStr) return { ok: false, error: 'Add start and end dates.' }
+  const startDate = new Date(startStr + 'T00:00:00Z')
+  const endDate = new Date(endStr + 'T00:00:00Z')
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return { ok: false, error: 'Invalid dates.' }
+  if (endDate < startDate) return { ok: false, error: 'End must be after start.' }
+
+  const profile = profileForIsoNumeric(isoNumeric)
+  const country = profile?.label ?? isoNumeric
+
+  const count = await prisma.tripSegment.count({ where: { tripId: trip.id } })
+  await prisma.tripSegment.create({
+    data: { tripId: trip.id, country, isoNumeric, startDate, endDate, displayOrder: count },
+  })
+
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+  return { ok: true }
+}
+
+export async function deleteTripSegment(formData: FormData) {
+  const tripSlug = String(formData.get('tripSlug') ?? '').trim()
+  const id = String(formData.get('id') ?? '').trim()
+  if (!tripSlug || !id) return
+  await requireTripAccess(tripSlug)
+  await prisma.tripSegment.deleteMany({ where: { id, trip: { slug: tripSlug } } })
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
 }
 
 // ----- Deletes ----------------------------------------------------------------------

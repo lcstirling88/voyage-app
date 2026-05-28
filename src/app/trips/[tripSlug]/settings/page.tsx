@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
 import { EditTripFormClient } from '@/components/EditTripFormClient'
 import { InviteFormClient } from '@/components/InviteFormClient'
+import { TripSegmentsEditorClient } from '@/components/TripSegmentsEditorClient'
+import { listDestinations } from '@/lib/destinations'
 
 const inboxDomain = process.env.NEXT_PUBLIC_INBOX_DOMAIN ?? 'voyage.local'
 
@@ -15,11 +17,24 @@ export default async function TripSettingsPage({ params }: { params: Promise<{ t
     include: {
       _count: { select: { bookings: true, documents: true } },
       memberships: { include: { user: true }, orderBy: { createdAt: 'asc' } },
+      segments: { orderBy: [{ startDate: 'asc' }, { displayOrder: 'asc' }] },
     },
   })
   if (!trip) return null
 
   const inboxAddress = `inbox+${trip.inboxToken}@${inboxDomain}`
+
+  const countryOptions = listDestinations().map((d) => ({
+    isoNumeric: d.isoNumeric!,
+    label: d.label,
+    flag: d.passportIcon ?? null,
+  }))
+  const segmentRows = trip.segments.map((s) => ({
+    id: s.id,
+    country: s.country,
+    flag: (countryOptions.find((o) => o.isoNumeric === s.isoNumeric)?.flag) ?? null,
+    range: `${format(s.startDate, 'd MMM')} – ${format(s.endDate, 'd MMM yyyy')}`,
+  }))
 
   return (
     <>
@@ -43,6 +58,25 @@ export default async function TripSettingsPage({ params }: { params: Promise<{ t
             members={trip.memberships}
             currentUserId={user.id}
             isOwner={role === 'owner'}
+          />
+        </section>
+
+        {/* Countries / legs */}
+        <section>
+          <div className="mb-4">
+            <h2 className="font-display text-2xl">Countries on this trip</h2>
+            <p className="text-sm text-ink-muted mt-1">
+              Visiting more than one country? Add each leg with its dates. Itinera then shows
+              the right clock, weather and currency for wherever you are — and gathers visa
+              and local info for every country at once. Skip this for a single-country trip.
+            </p>
+          </div>
+          <TripSegmentsEditorClient
+            tripSlug={trip.slug}
+            segments={segmentRows}
+            options={countryOptions}
+            tripStart={format(trip.startDate, 'yyyy-MM-dd')}
+            tripEnd={format(trip.endDate, 'yyyy-MM-dd')}
           />
         </section>
 
