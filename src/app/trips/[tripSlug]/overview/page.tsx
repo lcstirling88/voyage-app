@@ -83,15 +83,6 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
       <div className="relative overflow-hidden" style={{ background: theme.heroGradient }}>
         {theme.heroPattern === 'asanoha' && <div className="pattern-asanoha absolute inset-0 opacity-30" />}
         <div className="relative px-6 sm:px-10 pt-10 sm:pt-14 pb-12 sm:pb-16">
-          {/* Scriptline header — kept from the previous hero */}
-          <div className="flex items-center gap-3 mb-10 sm:mb-14">
-            <span className="text-sakura text-[10px] sm:text-xs uppercase tracking-[0.25em]">
-              {theme.motif && <span className="mr-2">{theme.motif}</span>}
-              {theme.scriptLine ?? trip.destination}
-            </span>
-            <span className="w-8 h-px bg-sakura/50" />
-          </div>
-
           {/* Countdown (left, huge) + trip identity (right, secondary). On
               mobile they stack — countdown on top so it still dominates. */}
           <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-8 sm:gap-12 lg:gap-16 items-end">

@@ -59,13 +59,7 @@ export default async function TripsListPage() {
               className="block border border-line rounded-xl bg-paper-pure overflow-hidden hover:shadow-soft transition"
             >
               <div className="flex flex-col sm:flex-row">
-                <div className="h-24 sm:h-auto sm:w-48 shrink-0 relative" style={{ background: theme.heroGradient }}>
-                  {theme.motif && (
-                    <span className="absolute bottom-3 left-3 text-paper-pure/80 text-[10px] uppercase tracking-[0.22em]">
-                      {theme.motif} · {theme.scriptLine ?? trip.destination}
-                    </span>
-                  )}
-                </div>
+                <div className="h-24 sm:h-auto sm:w-48 shrink-0" style={{ background: theme.heroGradient }} />
                 <div className="p-5 sm:p-6 flex-1 min-w-0">
                   <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">{trip.destination}</div>
                   <h2 className="font-display text-2xl sm:text-3xl mt-1">{trip.name}</h2>
