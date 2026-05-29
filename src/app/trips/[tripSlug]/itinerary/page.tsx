@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
-  Check, Clock, Utensils, Plane, Train, Car, BedDouble, LogOut, Plus, AlertTriangle,
+  Check, Clock, Utensils, Plane, Train, Car, BedDouble, LogOut, Plus, AlertTriangle, ArrowRight,
   Mountain, Telescope, Footprints, Sailboat, Wine, Bike, Camera, Landmark,
   Fish, Flag, Sparkles, Coffee, Music, Waves, Tent, TreePine, Heart,
   type LucideIcon,
@@ -156,6 +156,23 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
         tripSlug={trip.slug}
         today={today}
       />
+
+      {/* Plan-with-AI CTA — between the calendar and the day-by-day blocks. */}
+      <div className="px-4 sm:px-10 pt-6 sm:pt-8 max-w-5xl">
+        <Link
+          href={`/trips/${trip.slug}/plan`}
+          className="group flex items-center gap-3 rounded-2xl border border-dashed border-sage/50 bg-sage-soft/30 px-5 py-4 hover:bg-sage-soft/50 hover:border-sage transition"
+        >
+          <Sparkles className="w-5 h-5 text-sage shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-base sm:text-lg leading-tight">Let Itinera plan the rest</div>
+            <div className="text-xs text-ink-muted mt-0.5">
+              Tick what you&rsquo;re into and a budget — we&rsquo;ll fill your days with ideas that flow.
+            </div>
+          </div>
+          <ArrowRight className="w-4 h-4 text-ink-muted group-hover:text-ink transition shrink-0" />
+        </Link>
+      </div>
 
       <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-5xl space-y-10 sm:space-y-12">
         {days.map((day, idx) => {
@@ -487,9 +504,10 @@ function RestaurantRow({ booking, tripSlug }: { booking: Booking; tripSlug: stri
     ? String(partySizeRaw)
     : null
   const timeLabel = fmtTime(booking.startAt)
+  const suggested = (meta as Record<string, unknown>).__suggested === true
 
   return (
-    <div className="border border-line rounded-xl bg-paper-pure p-3 sm:p-4 hover:border-sage transition">
+    <div className={`rounded-xl p-3 sm:p-4 border transition ${suggested ? 'border-dashed border-sage/50 bg-sage-soft/40' : 'border-line bg-paper-pure hover:border-sage'}`}>
       {/* Header line: Utensils icon + Restaurant · time on left, delete on right */}
       <div className="flex items-center justify-between gap-3">
         <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2 min-w-0">
@@ -498,7 +516,12 @@ function RestaurantRow({ booking, tripSlug }: { booking: Booking; tripSlug: stri
             Restaurant{timeLabel ? ` · ${timeLabel}` : ''}{partySize ? ` · table for ${partySize}` : ''}
           </span>
         </div>
-        <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
+        <div className="flex items-center gap-2 shrink-0">
+          {suggested && (
+            <span className="pill" style={{ background: 'var(--color-sage-soft)', color: 'var(--color-sage-dark)' }}><Sparkles className="w-3 h-3" /> Suggested</span>
+          )}
+          <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
+        </div>
       </div>
 
       {/* Linked body — restaurant name, who it's booked under, address */}
@@ -549,9 +572,10 @@ function BookingRow({
   const Icon = iconForBooking(booking.type, booking.title)
   const typeLabel = typeLabelFor(booking.type)
   const timeLabel = fmtTime(booking.startAt)
+  const suggested = (safeJson<{ __suggested?: boolean }>(booking.metadata) ?? {}).__suggested === true
 
   return (
-    <div className="border border-line rounded-xl bg-paper-pure p-3 sm:p-4 hover:border-sage transition">
+    <div className={`rounded-xl p-3 sm:p-4 border transition ${suggested ? 'border-dashed border-sage/50 bg-sage-soft/40' : 'border-line bg-paper-pure hover:border-sage'}`}>
       {/* Header line: contextual icon + type · time on left, status pill + delete on right */}
       <div className="flex items-center justify-between gap-3">
         <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2 min-w-0">
@@ -559,7 +583,9 @@ function BookingRow({
           <span className="truncate">{typeLabel}{timeLabel ? ` · ${timeLabel}` : ''}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {booking.paid ? (
+          {suggested ? (
+            <span className="pill" style={{ background: 'var(--color-sage-soft)', color: 'var(--color-sage-dark)' }}><Sparkles className="w-3 h-3" /> Suggested</span>
+          ) : booking.paid ? (
             <span className="pill pill-paid"><Check className="w-3 h-3" /> Paid</span>
           ) : booking.paymentMethod === 'Pay at venue' ? (
             <span className="pill pill-upcoming"><Clock className="w-3 h-3" /> At venue</span>

@@ -1,7 +1,7 @@
 'use server'
 
 import { randomBytes } from 'crypto'
-import { format } from 'date-fns'
+import { format, startOfDay } from 'date-fns'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { Resend } from 'resend'
@@ -14,6 +14,7 @@ import { getAnthropic, PARSER_MODEL } from './anthropic'
 import { profileForDestination, profileForIsoNumeric } from './destinations'
 import { uploadAttachment } from './blob'
 import { getTripSegments } from './segments'
+import { cityForBooking } from './itinerary'
 
 // ----- Trip creation ----------------------------------------------------------------
 
@@ -538,6 +539,184 @@ export async function suggestActivities(formData: FormData): Promise<SuggestResu
     return { ok: true, suggestions: out.suggestions ?? [] }
   } catch (err) {
     console.error('[suggestActivities] error:', err)
+    return { ok: false, error: 'AI request failed. Try again in a moment.' }
+  }
+}
+
+// ----- AI trip planner --------------------------------------------------------------
+
+type PlanItem = {
+  date: string
+  session: 'morning' | 'afternoon' | 'night'
+  type: 'activity' | 'restaurant'
+  title: string
+  area?: string
+  location?: string
+  estimatedCost?: number
+  estimatedCurrency?: string
+  note?: string
+}
+
+export type GenerateTripPlanResult = { ok: true; count: number } | { ok: false; error: string }
+
+/**
+ * "Let Itinera plan it" — turn the traveller's ticked interests + budget + pace
+ * into a day-by-day set of suggested activities/restaurants, grouped by area so
+ * each day flows. Writes them as bookings flagged { __suggested: true } in
+ * metadata (rendered as dashed placeholders on the itinerary). Regenerating
+ * first clears any previous suggestions so it's idempotent.
+ */
+export async function generateTripPlan(formData: FormData): Promise<GenerateTripPlanResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!tripSlug) return { ok: false, error: 'Missing trip.' }
+
+  const interests = String(formData.get('interests') ?? '')
+    .split('||').map((s) => s.trim()).filter(Boolean)
+  const budgetTier = String(formData.get('budgetTier') ?? 'balanced')
+  const budgetAmount = String(formData.get('budgetAmount') ?? '').trim()
+  const pace = String(formData.get('pace') ?? 'balanced')
+
+  const anthropic = getAnthropic()
+  if (!anthropic) return { ok: false, error: 'AI not configured. Add ANTHROPIC_API_KEY to your environment.' }
+
+  const { trip } = await requireTripAccess(tripSlug)
+  const bookings = await prisma.booking.findMany({
+    where: { tripId: trip.id },
+    orderBy: { startAt: 'asc' },
+  })
+
+  // Accommodation timeline → which city each date is based in, so the model
+  // keeps a day's suggestions in one area.
+  const hotels = bookings.filter((b) => b.type === 'hotel')
+  const basedIn = hotels.length
+    ? hotels.map((h) => {
+        const city = cityForBooking(h) ?? h.location ?? trip.destination
+        return `  ${format(h.startAt, 'yyyy-MM-dd')} -> ${format(h.endAt ?? h.startAt, 'yyyy-MM-dd')}: ${city}`
+      }).join('\n')
+    : `  (no accommodation booked yet — assume the whole trip is around ${trip.destination})`
+
+  // What's already planned, so the model fills gaps rather than clashing.
+  const existing = bookings.filter((b) => b.type !== 'hotel')
+  const existingByDay = existing.length
+    ? existing.map((b) => `  ${format(b.startAt, 'yyyy-MM-dd')} ${format(b.startAt, 'HH:mm')} — ${b.title} (${b.type})`).join('\n')
+    : '  (nothing yet)'
+
+  const budgetText = budgetAmount
+    ? `Budget: roughly ${trip.homeCurrency} ${budgetAmount} total for activities + dining across the trip — prioritise to fit.`
+    : `Budget level: ${budgetTier} — ${
+        budgetTier === 'budget' ? 'favour free / cheap experiences, street food, public transport'
+        : budgetTier === 'splurge' ? 'premium experiences and notable restaurants are welcome'
+        : 'sensible mid-range choices'
+      }.`
+  const paceText =
+    pace === 'relaxed' ? '1-2 things per day with downtime'
+    : pace === 'packed' ? '3-4 things per day, full days'
+    : '2-3 things per day, balanced'
+
+  const context =
+    `Trip: ${trip.name}\n` +
+    `Destination: ${trip.destination}\n` +
+    `Dates: ${format(trip.startDate, 'yyyy-MM-dd')} to ${format(trip.endDate, 'yyyy-MM-dd')}\n` +
+    `Party: ${trip.adultCount} adult(s)${trip.childCount ? `, ${trip.childCount} child(ren)${trip.childrenAges ? ` aged ${trip.childrenAges}` : ''}` : ''}\n` +
+    `Local currency: ${trip.localCurrency ?? trip.homeCurrency}\n\n` +
+    `Accommodation timeline (where they're based each night):\n${basedIn}\n\n` +
+    `Already on the itinerary (don't duplicate; build around these):\n${existingByDay}\n\n` +
+    `Interests they ticked:\n${interests.length ? interests.map((i) => `  - ${i}`).join('\n') : '  - (open — surprise them with the classics)'}\n\n` +
+    `${budgetText}\nPace: ${paceText}`
+
+  try {
+    const response = await anthropic.messages.create({
+      model: PARSER_MODEL,
+      max_tokens: 4096,
+      system:
+        `You are an expert local travel concierge building a day-by-day plan of specific, NAMED ` +
+        `activities and restaurants. RULES:\n` +
+        `- Use only dates within the trip range.\n` +
+        `- Each date, the traveller is based in the city from the accommodation timeline — keep that ` +
+        `day's suggestions in or very near that city.\n` +
+        `- GROUP GEOGRAPHICALLY: cluster places close together (same neighbourhood/area) on the SAME day ` +
+        `so the day flows with minimal back-and-forth. Always state the area.\n` +
+        `- Honour the ticked interests; you may add a few complementary classics. Respect budget and pace.\n` +
+        `- Put restaurants at sensible meal sessions (lunch = afternoon, dinner = night).\n` +
+        `- Name REAL places, never generic ("a museum"). One short sentence per note.\n` +
+        `- Don't duplicate things already on the itinerary.`,
+      tools: [{
+        name: 'save_plan',
+        description: 'A day-by-day set of suggested activities and restaurants.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            items: {
+              type: 'array' as const,
+              items: {
+                type: 'object' as const,
+                properties: {
+                  date: { type: 'string' as const, description: 'YYYY-MM-DD within the trip' },
+                  session: { type: 'string' as const, enum: ['morning', 'afternoon', 'night'] },
+                  type: { type: 'string' as const, enum: ['activity', 'restaurant'] },
+                  title: { type: 'string' as const, description: 'specific named place / experience' },
+                  area: { type: 'string' as const, description: 'neighbourhood / area used for grouping' },
+                  location: { type: 'string' as const, description: 'address or area' },
+                  estimatedCost: { type: 'number' as const, description: 'per person, local currency' },
+                  estimatedCurrency: { type: 'string' as const, description: 'ISO 4217, e.g. JPY' },
+                  note: { type: 'string' as const, description: '1 sentence why it fits' },
+                },
+                required: ['date', 'session', 'type', 'title', 'area'],
+              },
+            },
+          },
+          required: ['items'],
+        },
+      }],
+      tool_choice: { type: 'tool', name: 'save_plan' },
+      messages: [{ role: 'user', content: context }],
+    })
+
+    const toolUse = response.content.find((c) => c.type === 'tool_use')
+    if (!toolUse || toolUse.type !== 'tool_use') {
+      return { ok: false, error: 'Itinera could not draft a plan. Try again.' }
+    }
+    const items = (toolUse.input as { items?: PlanItem[] }).items ?? []
+
+    // Clear previous suggestions so regenerating doesn't pile up duplicates.
+    await prisma.booking.deleteMany({
+      where: { tripId: trip.id, metadata: { contains: '"__suggested":true' } },
+    })
+
+    const tripStart = startOfDay(trip.startDate)
+    const tripEnd = startOfDay(trip.endDate)
+    const SESSION_TIME: Record<string, string> = { morning: '09:30', afternoon: '14:00', night: '19:00' }
+
+    let count = 0
+    for (const it of items) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(it.date)) continue
+      const day = startOfDay(new Date(`${it.date}T00:00:00Z`))
+      if (day < tripStart || day > tripEnd) continue
+      const time = SESSION_TIME[it.session] ?? '12:00'
+      const startAt = new Date(`${it.date}T${time}:00Z`)
+      if (isNaN(startAt.getTime())) continue
+      const type = it.type === 'restaurant' ? 'restaurant' : 'activity'
+      await prisma.booking.create({
+        data: {
+          tripId: trip.id,
+          type,
+          title: (it.title || 'Suggestion').slice(0, 200),
+          startAt,
+          location: it.location || it.area || null,
+          notes: it.note || null,
+          cost: typeof it.estimatedCost === 'number' ? it.estimatedCost : null,
+          currency: it.estimatedCurrency || trip.localCurrency || null,
+          metadata: JSON.stringify({ __suggested: true, area: it.area ?? null }),
+        },
+      })
+      count++
+    }
+
+    revalidatePath(`/trips/${tripSlug}/itinerary`)
+    revalidatePath(`/trips/${tripSlug}`, 'layout')
+    return { ok: true, count }
+  } catch (err) {
+    console.error('[generateTripPlan] error:', err)
     return { ok: false, error: 'AI request failed. Try again in a moment.' }
   }
 }
