@@ -9,6 +9,7 @@ import {
   profileForDestination, convertCurrency, currencySymbol,
   currencyDecimals, currencyQuickAmounts,
 } from '@/lib/destinations'
+import { getTripSegments, activeSegment, isMultiCountry } from '@/lib/segments'
 
 export default async function LocalPage({ params }: { params: Promise<{ tripSlug: string }> }) {
   const { tripSlug } = await params
@@ -18,10 +19,12 @@ export default async function LocalPage({ params }: { params: Promise<{ tripSlug
 
   const info = safeParseLocalInfo(trip.localInfoJson)
 
-  // Currency converter inputs — driven by the trip's actual destination, not
-  // a hardcoded JPY assumption. Local currency comes from the trip (set at
-  // create time from the destination profile); falls back to the profile.
-  const localCurrency = trip.localCurrency ?? profileForDestination(trip.destination).currency ?? 'USD'
+  // Currency converter inputs — driven by the trip's legs. On a multi-country
+  // trip the converter defaults to the leg you're on now (or heading to).
+  const segments = await getTripSegments(trip)
+  const activeLeg = activeSegment(segments)
+  const multiCountry = isMultiCountry(segments)
+  const localCurrency = activeLeg?.currency ?? trip.localCurrency ?? profileForDestination(trip.destination).currency ?? 'USD'
   const homeCurrency = trip.homeCurrency || 'AUD'
   // Build conversion targets: home first (highlighted), then up to 3 other
   // majors, skipping any that equal the local or home currency.
@@ -50,10 +53,23 @@ export default async function LocalPage({ params }: { params: Promise<{ tripSlug
       <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-7xl">
         {/* Currency converter always shown — works for any destination */}
         <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6 mb-6">
-          <div className="flex items-baseline justify-between mb-5">
-            <h3 className="font-display text-2xl">Currency converter</h3>
+          <div className="flex items-baseline justify-between mb-5 gap-3 flex-wrap">
+            <h3 className="font-display text-2xl">
+              Currency converter
+              {multiCountry && activeLeg && (
+                <span className="ml-2 text-sm text-ink-muted font-normal">
+                  · {activeLeg.flag ? `${activeLeg.flag} ` : ''}{activeLeg.country}
+                </span>
+              )}
+            </h3>
             <div className="text-xs text-ink-muted num-mono">Static rates · live in v2</div>
           </div>
+          {multiCountry && (
+            <p className="text-xs text-ink-muted mb-4 -mt-2">
+              Showing the leg you&apos;re on. Other legs:{' '}
+              {segments.filter((s) => s.currency !== localCurrency).map((s) => `${s.flag ?? ''} ${s.currency}`).join(' · ')}
+            </p>
+          )}
           <CurrencyConverterClient
             localCurrency={localCurrency}
             localSymbol={currencySymbol(localCurrency)}
