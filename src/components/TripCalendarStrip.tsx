@@ -48,7 +48,10 @@ export function TripCalendarStrip({
 
   return (
     <section className="bg-paper-pure border-b border-line">
-      <div className={`px-4 sm:px-10 py-3 sm:py-5 ${multiMonth ? 'max-w-5xl' : 'max-w-lg mx-auto'}`}>
+      <div
+        className={`px-4 sm:px-10 py-3 sm:py-5 ${multiMonth ? 'max-w-5xl' : 'mx-auto'}`}
+        style={multiMonth ? undefined : { maxWidth: '32rem' }}
+      >
         <div className="flex items-center justify-between mb-2 sm:mb-3">
           <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">
             Where you are
