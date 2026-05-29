@@ -13,6 +13,7 @@ import { requireUser, requireTripAccess } from './session'
 import { getAnthropic, PARSER_MODEL } from './anthropic'
 import { profileForDestination, profileForIsoNumeric } from './destinations'
 import { uploadAttachment } from './blob'
+import { getTripSegments } from './segments'
 
 // ----- Trip creation ----------------------------------------------------------------
 
@@ -295,6 +296,122 @@ export async function generateLocalInfo(formData: FormData): Promise<GenerateLoc
     return { ok: true }
   } catch (err) {
     console.error('[generateLocalInfo]', err)
+    return { ok: false, error: 'AI request failed. Try again.' }
+  }
+}
+
+// ----- AI visa / entry requirements -------------------------------------------------
+
+export type GenerateVisaResult = { ok: true } | { ok: false; error: string }
+
+export async function generateVisaInfo(formData: FormData): Promise<GenerateVisaResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!tripSlug) return { ok: false, error: 'Missing trip.' }
+  const anthropic = getAnthropic()
+  if (!anthropic) return { ok: false, error: 'AI not configured. Add ANTHROPIC_API_KEY.' }
+
+  const { trip, user } = await requireTripAccess(tripSlug)
+
+  // Passport = explicit nationality, else home country.
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { nationalityIso: true, homeCountryIso: true },
+  })
+  const passportIso = dbUser?.nationalityIso ?? dbUser?.homeCountryIso ?? null
+  if (!passportIso) {
+    return { ok: false, error: 'Set your passport on your profile first.' }
+  }
+  const passportLabel = profileForIsoNumeric(passportIso)?.label ?? passportIso
+
+  // Distinct destination countries from the trip legs (skip the passport
+  // country itself — no visa needed for your own passport).
+  const segments = await getTripSegments(trip)
+  const distinct: { country: string; iso: string | null }[] = []
+  const seen = new Set<string>()
+  for (const s of segments) {
+    if (s.isoNumeric === passportIso) continue
+    if (seen.has(s.country)) continue
+    seen.add(s.country)
+    distinct.push({ country: s.country, iso: s.isoNumeric })
+  }
+  if (distinct.length === 0) {
+    return { ok: false, error: 'No foreign destinations to check (you only travel within your passport country).' }
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: PARSER_MODEL,
+      max_tokens: 3072,
+      system:
+        `You are an immigration & entry-requirements assistant. Given a traveller's passport nationality and a list of destination countries, return ACCURATE, CURRENT general entry requirements for short-stay tourism. ` +
+        `Be specific about visa status (visa-free / ETA / eVisa / visa-on-arrival / visa-required), the permitted visa-free stay length in days, passport-validity rules (e.g. "valid 6 months beyond departure"), and any common gotchas (onward ticket, proof of funds, ETA application before travel). ` +
+        `If you are not confident for a country, set status "unknown" and say so. This is general guidance only — the UI shows a disclaimer telling the user to verify with official government sources.`,
+      tools: [{
+        name: 'save_visa_info',
+        description: 'Save per-country entry requirements for this passport holder.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            countries: {
+              type: 'array' as const,
+              minItems: 1,
+              items: {
+                type: 'object' as const,
+                properties: {
+                  country: { type: 'string' as const, description: 'Destination country name' },
+                  status: { type: 'string' as const, enum: ['visa-free', 'eta', 'evisa', 'visa-on-arrival', 'visa-required', 'unknown'] },
+                  allowedStayDays: { type: 'number' as const, description: 'Permitted visa-free/visa stay in days; omit if not applicable' },
+                  summary: { type: 'string' as const, description: 'One sentence: what this passport holder needs to enter' },
+                  requirements: { type: 'array' as const, items: { type: 'string' as const }, description: '2–5 specifics: passport validity, ETA/visa application steps, onward ticket, proof of funds' },
+                  passportValidityRule: { type: 'string' as const, description: 'e.g. "Passport valid for 6 months beyond your departure date"' },
+                },
+                required: ['country', 'status', 'summary', 'requirements'],
+              },
+            },
+          },
+          required: ['countries'],
+        },
+      }],
+      tool_choice: { type: 'tool', name: 'save_visa_info' },
+      messages: [{
+        role: 'user',
+        content:
+          `Passport / nationality: ${passportLabel}\n` +
+          `Destination countries for this trip: ${distinct.map((d) => d.country).join(', ')}\n` +
+          `Give short-stay tourist entry requirements for a ${passportLabel} passport holder for each destination.`,
+      }],
+    })
+
+    const toolUse = response.content.find((c) => c.type === 'tool_use')
+    if (!toolUse || toolUse.type !== 'tool_use') {
+      return { ok: false, error: 'AI did not return visa info.' }
+    }
+    const out = toolUse.input as { countries: Array<Record<string, unknown>> }
+
+    // Attach our isoNumeric to each returned country by name match.
+    const countries = (out.countries ?? []).map((c) => {
+      const name = String(c.country ?? '')
+      const match = distinct.find((d) => d.country.toLowerCase() === name.toLowerCase())
+      return {
+        country: name,
+        isoNumeric: match?.iso ?? null,
+        status: String(c.status ?? 'unknown'),
+        allowedStayDays: typeof c.allowedStayDays === 'number' ? c.allowedStayDays : null,
+        summary: String(c.summary ?? ''),
+        requirements: Array.isArray(c.requirements) ? c.requirements.map(String) : [],
+        passportValidityRule: c.passportValidityRule ? String(c.passportValidityRule) : null,
+      }
+    })
+
+    await prisma.trip.update({
+      where: { id: trip.id },
+      data: { visaInfoJson: JSON.stringify({ generatedAt: new Date().toISOString(), passportIso, passportLabel, countries }) },
+    })
+
+    revalidatePath(`/trips/${tripSlug}/local`)
+    return { ok: true }
+  } catch (err) {
+    console.error('[generateVisaInfo]', err)
     return { ok: false, error: 'AI request failed. Try again.' }
   }
 }

@@ -123,6 +123,10 @@ model Trip {
   // AI-generated local info for the destination (tipping, power, phrases, etc.)
   localInfoJson String?  // JSON blob — see lib/local-info.ts for shape
 
+  // AI-generated visa / entry requirements per destination country, for the
+  // trip owner's passport. JSON blob — see lib/visa.ts for shape.
+  visaInfoJson  String?
+
   // Colour palette for accommodation bars in itinerary: 'pastel' | 'jewel' | 'mono'
   colorPalette  String   @default("pastel")
 

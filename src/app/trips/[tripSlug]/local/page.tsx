@@ -1,10 +1,13 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { HandCoins, Plug, Banknote, Wifi, AlertOctagon, LifeBuoy } from 'lucide-react'
+import { HandCoins, Plug, Banknote, Wifi, AlertOctagon, LifeBuoy, Stamp } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
 import { CurrencyConverterClient, type ConversionTarget } from '@/components/CurrencyConverterClient'
 import { GenerateLocalInfoClient } from '@/components/GenerateLocalInfoClient'
+import { GenerateVisaInfoClient } from '@/components/GenerateVisaInfoClient'
 import { safeParseLocalInfo } from '@/lib/local-info'
+import { safeParseVisaInfo, visaStatusDisplay } from '@/lib/visa'
 import {
   profileForDestination, convertCurrency, currencySymbol,
   currencyDecimals, currencyQuickAmounts,
@@ -13,11 +16,19 @@ import { getTripSegments, activeSegment, isMultiCountry } from '@/lib/segments'
 
 export default async function LocalPage({ params }: { params: Promise<{ tripSlug: string }> }) {
   const { tripSlug } = await params
-  await requireTripAccess(tripSlug)
+  const { user } = await requireTripAccess(tripSlug)
   const trip = await prisma.trip.findUnique({ where: { slug: tripSlug } })
   if (!trip) notFound()
 
   const info = safeParseLocalInfo(trip.localInfoJson)
+
+  // Visa / entry: generated for the user's passport (nationality → home fallback).
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { nationalityIso: true, homeCountryIso: true },
+  })
+  const effectivePassport = dbUser?.nationalityIso ?? dbUser?.homeCountryIso ?? null
+  const visaInfo = safeParseVisaInfo(trip.visaInfoJson)
 
   // Currency converter inputs — driven by the trip's legs. On a multi-country
   // trip the converter defaults to the leg you're on now (or heading to).
@@ -51,6 +62,67 @@ export default async function LocalPage({ params }: { params: Promise<{ tripSlug
       </div>
 
       <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-7xl">
+        {/* Entry & visa — per destination, for the user's passport */}
+        <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6 mb-6">
+          <div className="flex items-baseline justify-between mb-4 gap-3 flex-wrap">
+            <h3 className="font-display text-2xl flex items-center gap-2">
+              <Stamp className="w-5 h-5 text-sage" /> Entry &amp; visa
+            </h3>
+            {visaInfo && <GenerateVisaInfoClient tripSlug={trip.slug} regenerate />}
+          </div>
+
+          {!effectivePassport ? (
+            <p className="text-sm text-ink-muted">
+              Set your passport on <Link href="/profile" className="ulink text-ink">your profile</Link> to
+              check entry requirements for your nationality.
+            </p>
+          ) : !visaInfo ? (
+            <GenerateVisaInfoClient tripSlug={trip.slug} />
+          ) : (
+            <>
+              {visaInfo.passportIso !== effectivePassport && (
+                <div className="text-xs text-rust mb-3">
+                  Generated for a {visaInfo.passportLabel} passport — your passport has changed since. Refresh to update.
+                </div>
+              )}
+              <div className="text-xs text-ink-muted mb-3">
+                For a <span className="text-ink">{visaInfo.passportLabel}</span> passport · short-stay tourism
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                {visaInfo.countries.map((c, i) => {
+                  const d = visaStatusDisplay(c.status)
+                  return (
+                    <div key={i} className="border border-line rounded-lg p-4">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="font-display text-lg">{c.country}</div>
+                        <span className={`pill ${d.pill}`}>{d.label}</span>
+                      </div>
+                      {c.allowedStayDays != null && (
+                        <div className="text-xs text-ink-muted mt-1 num-mono">Up to {c.allowedStayDays} days</div>
+                      )}
+                      <p className="text-sm mt-2">{c.summary}</p>
+                      {c.requirements.length > 0 && (
+                        <ul className="text-xs text-ink-muted mt-2 space-y-1">
+                          {c.requirements.map((r, j) => (
+                            <li key={j} className="flex gap-1.5"><span>·</span><span>{r}</span></li>
+                          ))}
+                        </ul>
+                      )}
+                      {c.passportValidityRule && (
+                        <div className="text-xs text-ink-muted mt-2 italic">{c.passportValidityRule}</div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-[10px] text-ink-muted mt-4 italic">
+                AI-generated guidance — entry rules change often. Always confirm with the official
+                government / embassy site before you travel.
+              </p>
+            </>
+          )}
+        </div>
+
         {/* Currency converter always shown — works for any destination */}
         <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6 mb-6">
           <div className="flex items-baseline justify-between mb-5 gap-3 flex-wrap">
