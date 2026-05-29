@@ -11,24 +11,24 @@ import Link from 'next/link'
 import { User as UserIcon, Compass, Sparkles } from 'lucide-react'
 import { ItineraBrand } from '@/components/ItineraBrand'
 
-const ROUTE_BLUE = '#0B6FB8'   // Spanish Blue — decorative route line
-const ROUTE_CORAL = '#F08080'  // Light Coral — origin/destination dots
+const ROUTE_LINE = '#B5633C'   // Terracotta — decorative route line
+const ROUTE_DOT = '#8F9A66'    // Spinifex sage — origin/destination dots
 
 export default function WelcomePage() {
   return (
     <main
       className="relative min-h-screen overflow-hidden"
       style={{
-        // Soft, airy wash within the palette — Uranium glow top-right,
-        // a faint Coral glow bottom-left, over a white→mist gradient.
+        // Soft, airy wash within the palette — ochre glow top-right,
+        // a faint spinifex-sage glow bottom-left, over a warm white→sand gradient.
         background:
-          'radial-gradient(70% 55% at 82% -5%, rgba(127,201,227,0.32) 0%, transparent 60%), ' +
-          'radial-gradient(60% 55% at 8% 105%, rgba(240,128,128,0.16) 0%, transparent 60%), ' +
-          'linear-gradient(180deg, #FFFFFF 0%, #E7F0FA 100%)',
+          'radial-gradient(70% 55% at 82% -5%, rgba(212,161,76,0.30) 0%, transparent 60%), ' +
+          'radial-gradient(60% 55% at 8% 105%, rgba(143,154,102,0.16) 0%, transparent 60%), ' +
+          'linear-gradient(180deg, #FCF7EF 0%, #F1E4D2 100%)',
       }}
     >
-      {/* Decorative dotted flight-path arcing across the page — brighter now,
-          a gradient Uranium→Spanish line with glowing coral waypoints. */}
+      {/* Decorative dotted flight-path arcing across the page —
+          a gradient ochre→terracotta line with glowing sage waypoints. */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
         viewBox="0 0 1200 800"
@@ -37,8 +37,8 @@ export default function WelcomePage() {
       >
         <defs>
           <linearGradient id="routeGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#7FC9E3" />
-            <stop offset="100%" stopColor={ROUTE_BLUE} />
+            <stop offset="0%" stopColor="#D2A14C" />
+            <stop offset="100%" stopColor={ROUTE_LINE} />
           </linearGradient>
         </defs>
         <path
@@ -54,8 +54,8 @@ export default function WelcomePage() {
           [80, 620], [720, 380], [1140, 220],
         ].map(([cx, cy]) => (
           <g key={`${cx}-${cy}`}>
-            <circle cx={cx} cy={cy} r="12" fill={ROUTE_CORAL} opacity="0.16" />
-            <circle cx={cx} cy={cy} r="5.5" fill={ROUTE_CORAL} opacity="0.85" />
+            <circle cx={cx} cy={cy} r="12" fill={ROUTE_DOT} opacity="0.16" />
+            <circle cx={cx} cy={cy} r="5.5" fill={ROUTE_DOT} opacity="0.85" />
           </g>
         ))}
       </svg>

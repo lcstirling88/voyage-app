@@ -1,6 +1,6 @@
 /**
  * Itinera brand mark — wordmark-only (Option E): the name set in Fraunces,
- * Delft Blue, finished with a Light-Coral full stop. No pictorial mark.
+ * deep umber, finished with a spinifex-sage full stop. No pictorial mark.
  *
  *   <ItineraBrand />                  →  "Itinera." wordmark, default size
  *   <ItineraBrand size="xl" />        →  larger for the welcome hero
@@ -8,8 +8,8 @@
  *   <ItineraBrand invert />           →  white wordmark for dark backgrounds
  */
 
-export const ITINERA_INK = '#1B2A55'      // Delft Blue — wordmark
-export const ITINERA_ACCENT = '#F08080'   // Light Coral — the full stop
+export const ITINERA_INK = '#33241B'      // Deep umber — wordmark
+export const ITINERA_ACCENT = '#8F9A66'   // Spinifex sage — the full stop
 
 export function ItineraBrand({
   size = 'md',

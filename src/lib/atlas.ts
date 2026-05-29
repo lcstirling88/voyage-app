@@ -92,12 +92,12 @@ export type CountryBreadthSpec = {
 }
 
 const COUNTRY_BREADTH_TIERS: CountryBreadthSpec[] = [
-  { tier: 'wanderer',     label: 'Wanderer',      icon: 'pin',     rangeLabel: 'Start the journey', color: '#D7DEE8', iconColor: '#1B2A55' },
-  { tier: 'traveller',    label: 'Traveller',     icon: 'plane',   rangeLabel: '1–10 countries',    color: '#86C5E6', iconColor: '#FFFFFF' },
-  { tier: 'explorer',     label: 'Explorer',      icon: 'compass', rangeLabel: '11–25 countries',   color: '#3E9BD4', iconColor: '#FFFFFF' },
-  { tier: 'adventurer',   label: 'Adventurer',    icon: 'map',     rangeLabel: '26–50 countries',   color: '#0B6FB8', iconColor: '#FFFFFF' },
-  { tier: 'globetrotter', label: 'Globetrotter',  icon: 'globe',   rangeLabel: '51–99 countries',   color: '#1B2A55', iconColor: '#FFFFFF' },
-  { tier: 'worldCitizen', label: 'World Citizen', icon: 'crown',   rangeLabel: '100+ countries',    color: '#F08080', iconColor: '#FFFFFF' },
+  { tier: 'wanderer',     label: 'Wanderer',      icon: 'pin',     rangeLabel: 'Start the journey', color: '#E7D8C2', iconColor: '#33241B' },
+  { tier: 'traveller',    label: 'Traveller',     icon: 'plane',   rangeLabel: '1–10 countries',    color: '#D2A14C', iconColor: '#FFFFFF' },
+  { tier: 'explorer',     label: 'Explorer',      icon: 'compass', rangeLabel: '11–25 countries',   color: '#B5633C', iconColor: '#FFFFFF' },
+  { tier: 'adventurer',   label: 'Adventurer',    icon: 'map',     rangeLabel: '26–50 countries',   color: '#8A4A2C', iconColor: '#FFFFFF' },
+  { tier: 'globetrotter', label: 'Globetrotter',  icon: 'globe',   rangeLabel: '51–99 countries',   color: '#33241B', iconColor: '#FFFFFF' },
+  { tier: 'worldCitizen', label: 'World Citizen', icon: 'crown',   rangeLabel: '100+ countries',    color: '#8F9A66', iconColor: '#FFFFFF' },
 ]
 
 export function tierForCountryCount(count: number): CountryBreadthSpec {

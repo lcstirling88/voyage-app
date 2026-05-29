@@ -15,18 +15,18 @@ export interface CountryTheme {
   scriptLine?: string
 }
 
-// All hero gradients now share the blue-forward identity: a deep Delft→Spanish
-// base with a Uranium-blue glow top-left and a Light-Coral glow top-right.
-// Per-destination character lives in the motif/scriptLine, not the colours.
-const URANIUM_GLOW = 'rgba(127,201,227,0.28)'
-const CORAL_GLOW = 'rgba(240,128,128,0.20)'
-const BLUE_BASE = 'linear-gradient(180deg, #14224A 0%, #163A6E 55%, #0B6FB8 125%)'
-const blueHero = (glowL = URANIUM_GLOW, glowR = CORAL_GLOW) =>
-  `radial-gradient(110% 60% at 15% 0%, ${glowL} 0%, transparent 60%), radial-gradient(80% 60% at 92% 12%, ${glowR} 0%, transparent 55%), ${BLUE_BASE}`
+// All hero gradients share the Red Centre identity: a deep umber→sienna→
+// terracotta base lit by a desert-ochre glow top-left and a spinifex-sage
+// glow top-right. Per-destination character lives in the motif/scriptLine.
+const OCHRE_GLOW = 'rgba(212,161,76,0.26)'
+const SAGE_GLOW = 'rgba(143,154,102,0.20)'
+const EARTH_BASE = 'linear-gradient(180deg, #2A1A12 0%, #5A3322 55%, #A8572F 125%)'
+const earthHero = (glowL = OCHRE_GLOW, glowR = SAGE_GLOW) =>
+  `radial-gradient(110% 60% at 15% 0%, ${glowL} 0%, transparent 60%), radial-gradient(80% 60% at 92% 12%, ${glowR} 0%, transparent 55%), ${EARTH_BASE}`
 
 export const themes: Record<ThemeKey, CountryTheme> = {
   'japan-autumn': {
-    heroGradient: blueHero('rgba(240,128,128,0.26)', 'rgba(127,201,227,0.24)'),
+    heroGradient: earthHero('rgba(143,154,102,0.24)', 'rgba(212,161,76,0.22)'),
     heroPattern: 'asanoha',
     accentClass: 'bg-sakura',
     accentSoftClass: 'bg-sakura-soft',
@@ -34,35 +34,35 @@ export const themes: Record<ThemeKey, CountryTheme> = {
     scriptLine: 'Autumn',
   },
   'new-zealand': {
-    heroGradient: blueHero(),
+    heroGradient: earthHero(),
     accentClass: 'bg-sage',
     accentSoftClass: 'bg-sage-soft',
     motif: 'NZ',
     scriptLine: 'Aotearoa',
   },
   'italy': {
-    heroGradient: blueHero('rgba(240,128,128,0.24)', 'rgba(127,201,227,0.26)'),
+    heroGradient: earthHero('rgba(212,161,76,0.26)', 'rgba(143,154,102,0.20)'),
     accentClass: 'bg-sakura',
     accentSoftClass: 'bg-sakura-soft',
     motif: 'IT',
     scriptLine: 'Italia',
   },
   'iceland': {
-    heroGradient: blueHero('rgba(127,201,227,0.40)', 'rgba(127,201,227,0.20)'),
+    heroGradient: earthHero('rgba(143,154,102,0.30)', 'rgba(143,154,102,0.18)'),
     accentClass: 'bg-sage',
     accentSoftClass: 'bg-sage-soft',
     motif: 'IS',
     scriptLine: 'Ísland',
   },
   'thailand': {
-    heroGradient: blueHero('rgba(127,201,227,0.30)', 'rgba(240,128,128,0.24)'),
+    heroGradient: earthHero('rgba(143,154,102,0.28)', 'rgba(212,161,76,0.24)'),
     accentClass: 'bg-sage',
     accentSoftClass: 'bg-sage-soft',
     motif: 'TH',
     scriptLine: 'ประเทศไทย',
   },
   'default': {
-    heroGradient: blueHero(),
+    heroGradient: earthHero(),
     accentClass: 'bg-sage',
     accentSoftClass: 'bg-sage-soft',
   },

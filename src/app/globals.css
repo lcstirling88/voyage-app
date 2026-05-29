@@ -1,38 +1,39 @@
 @import "tailwindcss";
 
 @theme {
-  /* Blue-forward palette (Uranium / Spanish / Delft Blue + Light Coral).
-     Token NAMES are kept (sage, gold, sakura…) so the hundreds of existing
-     bg-sage / text-ink / text-sakura usages across the app pick up the new
-     colours without a sweeping rename — only the VALUES changed.
-       sage  → Spanish Blue (primary)
-       ink   → Delft Blue (text / dark)
-       sakura→ Light Coral (accent)
-       gold  → a brighter secondary blue
-       paper → cool mist background */
-  --color-ink: #1B2A55;        /* Delft Blue — text + dark surfaces */
-  --color-ink-soft: #2E3D63;
-  --color-ink-muted: #6E7E9E;  /* blue-grey */
+  /* Red Centre palette — outback terracotta & ochre over warm sand, deep
+     umber text, with a spinifex-sage accent. Token NAMES are kept (sage,
+     gold, sakura…) so the hundreds of existing bg-sage / text-ink /
+     text-sakura usages across the app pick up the new colours without a
+     sweeping rename — only the VALUES changed.
+       sage  → Terracotta (primary)
+       ink   → Deep umber (text / dark)
+       sakura→ Spinifex sage (accent)
+       gold  → Desert ochre
+       paper → warm sand background */
+  --color-ink: #33241B;        /* deep umber — text + dark surfaces */
+  --color-ink-soft: #4A372B;
+  --color-ink-muted: #7A6353;  /* taupe-brown */
 
-  --color-paper: #F5F9FC;      /* cool mist */
-  --color-paper-pure: #FFFFFF;
-  --color-paper-card: #FFFFFF;
+  --color-paper: #F4EBDB;      /* warm sand */
+  --color-paper-pure: #FCF7EF; /* warm paper white */
+  --color-paper-card: #FCF7EF;
 
-  --color-line: #DCE6F0;
-  --color-line-soft: #EAF1F8;
+  --color-line: #E7D8C2;
+  --color-line-soft: #F1E7D6;
 
-  --color-sage: #0B6FB8;       /* Spanish Blue — primary */
-  --color-sage-soft: #D9EAF6;
-  --color-sage-dark: #143A6B;
+  --color-sage: #B5633C;       /* Terracotta — primary */
+  --color-sage-soft: #F0DCCB;
+  --color-sage-dark: #8A4A2C;
 
-  --color-gold: #3E9BD4;       /* secondary bright blue (was gold) */
-  --color-gold-soft: #DCEEF8;
+  --color-gold: #C2853C;       /* Desert ochre (was gold) */
+  --color-gold-soft: #F1E2C7;
 
-  --color-sakura: #F08080;     /* Light Coral — accent */
-  --color-sakura-soft: #FCE3E3;
+  --color-sakura: #8F9A66;     /* Spinifex sage — accent */
+  --color-sakura-soft: #E7ECDB;
 
-  --color-wine: #B5524F;       /* deep coral — readable on coral-soft */
-  --color-rust: #C2625C;       /* muted coral — warnings */
+  --color-wine: #9C3D2E;       /* deep red-brown — destructive actions */
+  --color-rust: #BC5A44;       /* warm rust — warnings */
 
   --font-display: var(--font-fraunces), serif;
   --font-sans: var(--font-inter), system-ui, sans-serif;
@@ -59,9 +60,9 @@ body {
 
 .hero-light {
   background:
-    radial-gradient(80% 50% at 10% 0%, rgba(127,201,227,0.30) 0%, transparent 55%),
-    radial-gradient(60% 50% at 100% 30%, rgba(240,128,128,0.16) 0%, transparent 60%),
-    linear-gradient(180deg, #FFFFFF 0%, #F5F9FC 100%);
+    radial-gradient(80% 50% at 10% 0%, rgba(194,133,60,0.22) 0%, transparent 55%),
+    radial-gradient(60% 50% at 100% 30%, rgba(143,154,102,0.16) 0%, transparent 60%),
+    linear-gradient(180deg, #FCF7EF 0%, #F4EBDB 100%);
 }
 
 .pattern-asanoha {
@@ -141,7 +142,7 @@ body {
   outline: none;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
-.input:focus { border-color: var(--color-sage); box-shadow: 0 0 0 3px rgba(63,91,78,0.12); }
+.input:focus { border-color: var(--color-sage); box-shadow: 0 0 0 3px rgba(181,99,60,0.15); }
 
 .btn-ink {
   background: var(--color-ink);

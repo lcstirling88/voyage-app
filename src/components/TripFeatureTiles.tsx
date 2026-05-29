@@ -17,7 +17,7 @@ import {
  *  - Icon backdrop bumped from w-11 → w-12 mobile / w-12 → w-14 desktop,
  *    and the glyph itself from w-5 → w-6 mobile / w-6 → w-7 desktop, so
  *    the "picture" inside each white card reads a touch more present
- *  - Progress strip still lives on Costs + Packing tiles (gold + burgundy
+ *  - Progress strip still lives on Costs + Packing tiles (sienna + rust
  *    bars across the bottom of each, above the label)
  */
 
@@ -66,16 +66,16 @@ export function TripFeatureTiles({
       label: 'Itinerary',
       preview: itineraryPreview,
       Icon: CalendarDays,
-      tintBg: 'rgba(11, 111, 184, 0.10)',   // Spanish Blue
-      tintFg: '#0B6FB8',
+      tintBg: 'rgba(181, 99, 60, 0.10)',    // Terracotta
+      tintFg: '#B5633C',
     },
     {
       href: `/trips/${tripSlug}/costs`,
       label: 'Costs & Payments',
       preview: costsPreview,
       Icon: Wallet,
-      tintBg: 'rgba(27, 42, 85, 0.10)',     // Delft Blue
-      tintFg: '#1B2A55',
+      tintBg: 'rgba(110, 58, 40, 0.10)',    // Burnt sienna
+      tintFg: '#6E3A28',
       progressPct: costsPct,
     },
     {
@@ -83,32 +83,32 @@ export function TripFeatureTiles({
       label: 'Weather',
       preview: weatherPreview,
       Icon: CloudSun,
-      tintBg: 'rgba(62, 155, 212, 0.14)',   // bright blue
-      tintFg: '#2E86C9',
+      tintBg: 'rgba(194, 133, 60, 0.16)',   // Desert ochre
+      tintFg: '#B57A2E',
     },
     {
       href: `/trips/${tripSlug}/local`,
       label: 'Local Info',
       preview: localPreview,
       Icon: Globe2,
-      tintBg: 'rgba(240, 128, 128, 0.14)',  // Light Coral accent
-      tintFg: '#E06A6A',
+      tintBg: 'rgba(143, 154, 102, 0.16)',  // Spinifex sage
+      tintFg: '#6F7A4A',
     },
     {
       href: `/trips/${tripSlug}/documents`,
       label: 'Documents',
       preview: documentsPreview,
       Icon: Folder,
-      tintBg: 'rgba(14, 92, 134, 0.12)',    // deep teal-blue
-      tintFg: '#0E5C86',
+      tintBg: 'rgba(162, 97, 58, 0.12)',    // Clay
+      tintFg: '#A2613A',
     },
     {
       href: `/trips/${tripSlug}/checklist`,
       label: 'Packing Assist',
       preview: packingPreview,
       Icon: ListChecks,
-      tintBg: 'rgba(199, 93, 93, 0.12)',    // deep coral
-      tintFg: '#C75D5D',
+      tintBg: 'rgba(188, 90, 68, 0.12)',    // Rust
+      tintFg: '#BC5A44',
       progressPct: packingPct,
     },
     {
@@ -116,16 +116,16 @@ export function TripFeatureTiles({
       label: 'Forward bookings',
       preview: inboxPreview,
       Icon: Mail,
-      tintBg: 'rgba(90, 113, 150, 0.12)',   // slate blue
-      tintFg: '#5A7196',
+      tintBg: 'rgba(138, 122, 78, 0.14)',   // Dry grass
+      tintFg: '#8A7A4E',
     },
     {
       href: `/trips/${tripSlug}/settings`,
       label: 'Trip settings',
       preview: settingsPreview,
       Icon: SettingsIcon,
-      tintBg: 'rgba(72, 86, 111, 0.12)',    // slate
-      tintFg: '#48566F',
+      tintBg: 'rgba(122, 99, 83, 0.12)',    // Taupe stone
+      tintFg: '#7A6353',
     },
   ]
 
