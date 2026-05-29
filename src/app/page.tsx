@@ -54,7 +54,7 @@ export default function WelcomePage() {
             </linearGradient>
           </defs>
           <path
-            d="M 80 620 Q 360 200 720 380 Q 980 480 1140 220"
+            d="M 52 655 Q 360 200 720 380 Q 980 480 1140 220"
             stroke="url(#routeGrad)"
             strokeWidth="2.5"
             strokeDasharray="3 12"
@@ -63,7 +63,7 @@ export default function WelcomePage() {
             fill="none"
           />
           {[
-            [80, 620], [720, 380], [1140, 220],
+            [52, 655], [720, 380], [1140, 220],
           ].map(([cx, cy]) => (
             <g key={`${cx}-${cy}`}>
               <circle cx={cx} cy={cy} r="12" fill={ROUTE_DOT} opacity="0.16" />
