@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect } from 'react'
 import { ArrowRight, Sparkles } from 'lucide-react'
 import { createTrip, type CreateTripResult } from '@/lib/actions'
-import { deriveThemeFromDestination, themes, themeOptions, type ThemeKey } from '@/lib/theme'
+import { deriveThemeFromDestination, themes, type ThemeKey } from '@/lib/theme'
 
 const DEFAULT_CURRENCIES = ['AUD', 'USD', 'GBP', 'EUR', 'NZD', 'JPY', 'SGD']
 
@@ -18,7 +18,6 @@ export function NewTripFormClient() {
   const [departureCity, setDepartureCity] = useState('')
   const [cities, setCities] = useState('')
   const [themeKey, setThemeKey] = useState<ThemeKey>('default')
-  const [themeOverridden, setThemeOverridden] = useState(false)
   const [adultCount, setAdultCount] = useState(2)
   const [childCount, setChildCount] = useState(0)
   const [childrenAges, setChildrenAges] = useState('')
@@ -26,12 +25,11 @@ export function NewTripFormClient() {
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
-  // Auto-derive theme when destination changes (unless user picked one manually)
+  // Theme is auto-derived from the destination — no manual picker any more
+  // (all themes render the same warm hero now; it's just an internal label).
   useEffect(() => {
-    if (!themeOverridden) {
-      setThemeKey(deriveThemeFromDestination(destination))
-    }
-  }, [destination, themeOverridden])
+    setThemeKey(deriveThemeFromDestination(destination))
+  }, [destination])
 
   const previewTheme = themes[themeKey]
 
@@ -72,12 +70,6 @@ export function NewTripFormClient() {
           <div className="pattern-asanoha absolute inset-0 opacity-30" />
         )}
         <div className="relative p-7">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-paper-pure/70 text-[10px] uppercase tracking-[0.25em]">
-              {previewTheme.motif && <span className="mr-2">{previewTheme.motif}</span>}
-              {previewTheme.scriptLine ?? destination ?? 'Preview'}
-            </span>
-          </div>
           <div className="h-display text-paper-pure text-5xl truncate">
             {name || 'Your next trip.'}
           </div>
@@ -168,19 +160,6 @@ export function NewTripFormClient() {
           </select>
         </div>
 
-        <div>
-          <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Theme</label>
-          <select
-            className="input mt-1.5"
-            value={themeKey}
-            onChange={(e) => { setThemeKey(e.target.value as ThemeKey); setThemeOverridden(true) }}
-          >
-            {themeOptions.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-
         <div className="col-span-2">
           <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Travellers</label>
           <input
@@ -232,7 +211,7 @@ export function NewTripFormClient() {
             {[
               { value: 'pastel', label: 'Pastel', sample: ['#E8C9C9', '#CBDCE8', '#CFE5D2', '#E8DFC4'] },
               { value: 'jewel',  label: 'Jewel',  sample: ['#2E5A47', '#2A4A72', '#7A2E3A', '#503279'] },
-              { value: 'mono',   label: 'Mono',   sample: ['#3F5B4E', '#3F5B4E', '#3F5B4E', '#3F5B4E'] },
+              { value: 'mono',   label: 'Mono',   sample: ['#A8572F', '#A8572F', '#A8572F', '#A8572F'] },
             ].map((o) => {
               const active = colorPalette === o.value
               return (

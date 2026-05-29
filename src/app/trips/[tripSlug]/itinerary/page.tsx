@@ -11,6 +11,8 @@ import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
 import { fmtTime, safeJson, fmtMoneyFull } from '@/lib/format'
 import { InlineDeleteButton } from '@/components/InlineDeleteButton'
+import { ConfirmSuggestionButton } from '@/components/ConfirmSuggestionButton'
+import { clearTripSuggestions } from '@/lib/actions'
 import {
   planForDay, SESSIONS, SESSION_LABEL, formatTime,
   hotelOrderForTrip, sleepingTonightFor, getPalette, colorForHotel,
@@ -20,6 +22,11 @@ import {
 import { profileForDestination } from '@/lib/destinations'
 import { TripCalendarStrip } from '@/components/TripCalendarStrip'
 import type { Booking } from '@prisma/client'
+
+/** True if a booking is an unconfirmed AI suggestion (dashed placeholder). */
+function isSuggestedBooking(b: Booking): boolean {
+  return (safeJson<{ __suggested?: boolean }>(b.metadata) ?? {}).__suggested === true
+}
 
 /**
  * Pick a contextual lucide icon for the small uppercase header line of an
@@ -172,6 +179,14 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
           </div>
           <ArrowRight className="w-4 h-4 text-ink-muted group-hover:text-ink transition shrink-0" />
         </Link>
+        {trip.bookings.some(isSuggestedBooking) && (
+          <form action={clearTripSuggestions} className="mt-2 text-right">
+            <input type="hidden" name="tripSlug" value={trip.slug} />
+            <button type="submit" className="text-[11px] uppercase tracking-[0.18em] text-ink-muted hover:text-rust ulink">
+              Clear all suggestions
+            </button>
+          </form>
+        )}
       </div>
 
       <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-5xl space-y-10 sm:space-y-12">
@@ -520,6 +535,7 @@ function RestaurantRow({ booking, tripSlug }: { booking: Booking; tripSlug: stri
           {suggested && (
             <span className="pill" style={{ background: 'var(--color-sage-soft)', color: 'var(--color-sage-dark)' }}><Sparkles className="w-3 h-3" /> Suggested</span>
           )}
+          {suggested && <ConfirmSuggestionButton id={booking.id} tripSlug={tripSlug} />}
           <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
         </div>
       </div>
@@ -592,6 +608,7 @@ function BookingRow({
           ) : booking.cost ? (
             <span className="pill pill-upcoming"><Clock className="w-3 h-3" /> Pending</span>
           ) : null}
+          {suggested && <ConfirmSuggestionButton id={booking.id} tripSlug={tripSlug} />}
           <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
         </div>
       </div>

@@ -731,6 +731,38 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
   }
 }
 
+// ----- Suggestion management (from the AI planner) ---------------------------------
+
+/** Promote a suggested booking to a real one (strip the __suggested flag so it
+ *  renders as a normal, "booked" item). */
+export async function confirmSuggestion(formData: FormData): Promise<void> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  const id = String(formData.get('id') ?? '')
+  if (!tripSlug || !id) return
+  const { trip } = await requireTripAccess(tripSlug)
+  const booking = await prisma.booking.findFirst({ where: { id, tripId: trip.id } })
+  if (!booking) return
+  let meta: Record<string, unknown> = {}
+  try { meta = booking.metadata ? JSON.parse(booking.metadata) : {} } catch { meta = {} }
+  delete meta.__suggested
+  const newMeta = Object.keys(meta).length ? JSON.stringify(meta) : null
+  await prisma.booking.update({ where: { id }, data: { metadata: newMeta } })
+  revalidatePath(`/trips/${tripSlug}/itinerary`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+}
+
+/** Remove every AI suggestion from a trip in one go. */
+export async function clearTripSuggestions(formData: FormData): Promise<void> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!tripSlug) return
+  const { trip } = await requireTripAccess(tripSlug)
+  await prisma.booking.deleteMany({
+    where: { tripId: trip.id, metadata: { contains: '"__suggested":true' } },
+  })
+  revalidatePath(`/trips/${tripSlug}/itinerary`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+}
+
 // ----- Manual booking add -----------------------------------------------------------
 
 export type AddBookingResult = { ok: true } | { ok: false; error: string }

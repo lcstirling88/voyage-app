@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition } from 'react'
 import { ArrowRight, Trash2, AlertTriangle } from 'lucide-react'
 import { editTrip, deleteTrip, type EditTripResult } from '@/lib/actions'
-import { deriveThemeFromDestination, themes, themeOptions, type ThemeKey } from '@/lib/theme'
+import { themes, type ThemeKey } from '@/lib/theme'
 
 const DEFAULT_CURRENCIES = ['AUD', 'USD', 'GBP', 'EUR', 'NZD', 'JPY', 'SGD']
 
@@ -62,8 +62,7 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
   const [homeCurrency, setHomeCurrency] = useState(trip.homeCurrency)
   const [travelerNames, setTravelerNames] = useState(trip.travelerNames ?? '')
   const [departureCity, setDepartureCity] = useState(trip.departureCity ?? '')
-  const [themeKey, setThemeKey] = useState<ThemeKey>(trip.themeKey as ThemeKey)
-  const [themeOverridden, setThemeOverridden] = useState(true) // already set
+  const [themeKey] = useState<ThemeKey>(trip.themeKey as ThemeKey)
   const [adultCount, setAdultCount] = useState(trip.adultCount ?? 1)
   const [childCount, setChildCount] = useState(trip.childCount ?? 0)
   const [childrenAges, setChildrenAges] = useState(trip.childrenAges ?? '')
@@ -74,10 +73,6 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
 
   const [confirmText, setConfirmText] = useState('')
   const [deletePending, startDeleteTransition] = useTransition()
-
-  useEffect(() => {
-    if (!themeOverridden) setThemeKey(deriveThemeFromDestination(destination))
-  }, [destination, themeOverridden])
 
   const previewTheme = themes[themeKey]
 
@@ -125,10 +120,6 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
         >
           {previewTheme.heroPattern === 'asanoha' && <div className="pattern-asanoha absolute inset-0 opacity-30" />}
           <div className="relative p-7">
-            <div className="text-paper-pure/70 text-[10px] uppercase tracking-[0.25em] mb-3">
-              {previewTheme.motif && <span className="mr-2">{previewTheme.motif}</span>}
-              {previewTheme.scriptLine ?? destination}
-            </div>
             <div className="h-display text-paper-pure text-5xl truncate">{name || 'Your trip'}</div>
             {tagline && <div className="font-display italic text-paper-pure/70 text-sm mt-2 max-w-md truncate">{tagline}</div>}
           </div>
@@ -165,12 +156,6 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
               {DEFAULT_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <div>
-            <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Theme</label>
-            <select className="input mt-1.5" value={themeKey} onChange={(e) => { setThemeKey(e.target.value as ThemeKey); setThemeOverridden(true) }}>
-              {themeOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
           <div className="col-span-2">
             <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Travellers</label>
             <input className="input mt-1.5" value={travelerNames} onChange={(e) => setTravelerNames(e.target.value)} />
@@ -197,7 +182,7 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
               <PaletteOption value="jewel" current={colorPalette} onPick={setColorPalette}
                 label="Jewel" sample={['#2E5A47', '#2A4A72', '#7A2E3A', '#503279']} />
               <PaletteOption value="mono" current={colorPalette} onPick={setColorPalette}
-                label="Mono" sample={['#3F5B4E', '#3F5B4E', '#3F5B4E', '#3F5B4E']} />
+                label="Mono" sample={['#A8572F', '#A8572F', '#A8572F', '#A8572F']} />
             </div>
             <p className="text-xs text-ink-muted mt-2">Each hotel in your trip gets a distinct colour bar under the day header.</p>
           </div>

@@ -112,9 +112,9 @@ export const PALETTES: Record<ColorPalette, PaletteSpec> = {
   mono: {
     key: 'mono',
     label: 'Mono',
-    description: 'Single sage tone — subtle, all hotels look the same.',
-    colors: ['#3F5B4E'],
-    textOnColor: '#FBF8F1',
+    description: 'Single terracotta tone — subtle, all hotels look the same.',
+    colors: ['#A8572F'],
+    textOnColor: '#FBF5EA',
   },
 }
 
