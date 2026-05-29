@@ -56,10 +56,10 @@ export type AtlasTierSpec = {
 }
 
 const TIERS: Record<AtlasTier, AtlasTierSpec> = {
-  touchdown: { tier: 'touchdown', label: 'Touchdown', stars: 1, mapFill: '#C8D4CC', isLived: false },
-  visited:   { tier: 'visited',   label: 'Visited',   stars: 2, mapFill: '#7A9387', isLived: false },
-  explored:  { tier: 'explored',  label: 'Explored',  stars: 3, mapFill: '#3F5B4E', isLived: false },
-  lived:     { tier: 'lived',     label: 'Lived',     stars: 4, mapFill: '#243730', isLived: true },
+  touchdown: { tier: 'touchdown', label: 'Touchdown', stars: 1, mapFill: '#CFE6F4', isLived: false },
+  visited:   { tier: 'visited',   label: 'Visited',   stars: 2, mapFill: '#86C5E6', isLived: false },
+  explored:  { tier: 'explored',  label: 'Explored',  stars: 3, mapFill: '#2E86C9', isLived: false },
+  lived:     { tier: 'lived',     label: 'Lived',     stars: 4, mapFill: '#1B2A55', isLived: true },
 }
 
 export function tierForDays(days: number): AtlasTierSpec {
@@ -92,12 +92,12 @@ export type CountryBreadthSpec = {
 }
 
 const COUNTRY_BREADTH_TIERS: CountryBreadthSpec[] = [
-  { tier: 'wanderer',     label: 'Wanderer',      icon: 'pin',     rangeLabel: 'Start the journey', color: '#E8E2D4', iconColor: '#5C4938' },
-  { tier: 'traveller',    label: 'Traveller',     icon: 'plane',   rangeLabel: '1–10 countries',    color: '#A8B7AE', iconColor: '#FBF8F1' },
-  { tier: 'explorer',     label: 'Explorer',      icon: 'compass', rangeLabel: '11–25 countries',   color: '#7A9387', iconColor: '#FBF8F1' },
-  { tier: 'adventurer',   label: 'Adventurer',    icon: 'map',     rangeLabel: '26–50 countries',   color: '#3F5B4E', iconColor: '#FBF8F1' },
-  { tier: 'globetrotter', label: 'Globetrotter',  icon: 'globe',   rangeLabel: '51–99 countries',   color: '#A8814B', iconColor: '#FBF8F1' },
-  { tier: 'worldCitizen', label: 'World Citizen', icon: 'crown',   rangeLabel: '100+ countries',    color: '#6B2737', iconColor: '#FBF8F1' },
+  { tier: 'wanderer',     label: 'Wanderer',      icon: 'pin',     rangeLabel: 'Start the journey', color: '#D7DEE8', iconColor: '#1B2A55' },
+  { tier: 'traveller',    label: 'Traveller',     icon: 'plane',   rangeLabel: '1–10 countries',    color: '#86C5E6', iconColor: '#FFFFFF' },
+  { tier: 'explorer',     label: 'Explorer',      icon: 'compass', rangeLabel: '11–25 countries',   color: '#3E9BD4', iconColor: '#FFFFFF' },
+  { tier: 'adventurer',   label: 'Adventurer',    icon: 'map',     rangeLabel: '26–50 countries',   color: '#0B6FB8', iconColor: '#FFFFFF' },
+  { tier: 'globetrotter', label: 'Globetrotter',  icon: 'globe',   rangeLabel: '51–99 countries',   color: '#1B2A55', iconColor: '#FFFFFF' },
+  { tier: 'worldCitizen', label: 'World Citizen', icon: 'crown',   rangeLabel: '100+ countries',    color: '#F08080', iconColor: '#FFFFFF' },
 ]
 
 export function tierForCountryCount(count: number): CountryBreadthSpec {
@@ -114,14 +114,14 @@ export const UPCOMING_ONLY_FILL = 'url(#hatch-upcoming)'
 /** Fill used for countries the user has no trips in. Two shades darker than
  *  the original very-pale beige so unvisited land reads clearly as land
  *  (not as ocean) and the visited sage tiers pop a little harder. */
-export const UNVISITED_FILL = '#B8B0A0'
-/** Gold border colour for the Lived tier — matches --color-gold in globals.css. */
-export const LIVED_EDGE_COLOR = '#A8814B'
-/** Deep wine burgundy used for the user's country of residence. Sits at the
- *  same visual weight as the Lived tier (#243730) but warm where that's
- *  cool, so "home" reads as a distinct category rather than another tier on
- *  the travel ladder. Paired with the gold Lived edge for prominence. */
-export const HOME_FILL = '#6B2737'
+export const UNVISITED_FILL = '#D7DEE8'
+/** Coral border colour for the Lived tier — the brand accent against the
+ *  deep-blue fill. */
+export const LIVED_EDGE_COLOR = '#F08080'
+/** Deep coral used for the user's country of residence — warm against the
+ *  blue travel tiers, so "home" reads as a distinct category rather than
+ *  another rung on the travel ladder. Edged with the coral Lived edge. */
+export const HOME_FILL = '#B5524F'
 
 // ---------------------------------------------------------------------------
 // Trip aggregation — shared by /atlas and /atlas/map so the same trips

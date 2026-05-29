@@ -87,13 +87,13 @@ export default async function AtlasPage() {
               {homeCountry && (
                 <LegendSwatch color={HOME_FILL} label="Home" border={LIVED_EDGE_COLOR} />
               )}
-              <LegendSwatch color="#C8D4CC" label="★ Touchdown" />
-              <LegendSwatch color="#7A9387" label="★★ Visited" />
-              <LegendSwatch color="#3F5B4E" label="★★★ Explored" />
-              <LegendSwatch color="#243730" label="★★★★ Lived" border={LIVED_EDGE_COLOR} />
+              <LegendSwatch color="#CFE6F4" label="★ Touchdown" />
+              <LegendSwatch color="#86C5E6" label="★★ Visited" />
+              <LegendSwatch color="#2E86C9" label="★★★ Explored" />
+              <LegendSwatch color="#1B2A55" label="★★★★ Lived" border={LIVED_EDGE_COLOR} />
               <LegendSwatch
                 label="Going there"
-                gradient="repeating-linear-gradient(45deg, #3F5B4E 0 3px, #A8B7AE 3px 6px)"
+                gradient="repeating-linear-gradient(45deg, #2E86C9 0 3px, #B9D9EC 3px 6px)"
               />
             </div>
           )}

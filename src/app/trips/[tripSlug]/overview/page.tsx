@@ -76,7 +76,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
 
   return (
     <>
-      {/* Hero — full-bleed gradient strip. The countdown numeral is the
+      {/* (rebrand) Hero — full-bleed gradient strip. The countdown numeral is the
           visual king on this page; the trip's identity (name, dates,
           departure city) collapses into a smaller right-hand column so
           the eye lands on the number first. */}

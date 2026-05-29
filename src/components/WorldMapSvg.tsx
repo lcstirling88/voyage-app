@@ -4,7 +4,7 @@ import {
   type AtlasRenderHint,
 } from '@/lib/atlas'
 
-const COUNTRY_STROKE = '#FBF8F1'
+const COUNTRY_STROKE = '#F5F9FC'
 
 /**
  * Server component that renders the world map SVG. Used by both the
@@ -41,12 +41,12 @@ export function WorldMapSvg({
           patternUnits="userSpaceOnUse"
           patternTransform="rotate(45)"
         >
-          <rect width="6" height="6" fill="#A8B7AE" />
-          <rect width="3" height="6" fill="#3F5B4E" />
+          <rect width="6" height="6" fill="#B9D9EC" />
+          <rect width="3" height="6" fill="#2E86C9" />
         </pattern>
       </defs>
 
-      <rect width={ATLAS_VIEW_WIDTH} height={ATLAS_VIEW_HEIGHT} fill="#F4EFE3" />
+      <rect width={ATLAS_VIEW_WIDTH} height={ATLAS_VIEW_HEIGHT} fill="#EAF1F8" />
 
       {COUNTRY_PATHS.map((c) => {
         const hint = renderHints.get(c.id)

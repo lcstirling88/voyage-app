@@ -66,16 +66,16 @@ export function TripFeatureTiles({
       label: 'Itinerary',
       preview: itineraryPreview,
       Icon: CalendarDays,
-      tintBg: 'rgba(63, 91, 78, 0.10)',
-      tintFg: '#3F5B4E',
+      tintBg: 'rgba(11, 111, 184, 0.10)',   // Spanish Blue
+      tintFg: '#0B6FB8',
     },
     {
       href: `/trips/${tripSlug}/costs`,
       label: 'Costs & Payments',
       preview: costsPreview,
       Icon: Wallet,
-      tintBg: 'rgba(168, 129, 75, 0.14)',
-      tintFg: '#A8814B',
+      tintBg: 'rgba(27, 42, 85, 0.10)',     // Delft Blue
+      tintFg: '#1B2A55',
       progressPct: costsPct,
     },
     {
@@ -83,32 +83,32 @@ export function TripFeatureTiles({
       label: 'Weather',
       preview: weatherPreview,
       Icon: CloudSun,
-      tintBg: 'rgba(122, 147, 135, 0.16)',
-      tintFg: '#7A9387',
+      tintBg: 'rgba(62, 155, 212, 0.14)',   // bright blue
+      tintFg: '#2E86C9',
     },
     {
       href: `/trips/${tripSlug}/local`,
       label: 'Local Info',
       preview: localPreview,
       Icon: Globe2,
-      tintBg: 'rgba(198, 107, 71, 0.12)',
-      tintFg: '#C66B47',
+      tintBg: 'rgba(240, 128, 128, 0.14)',  // Light Coral accent
+      tintFg: '#E06A6A',
     },
     {
       href: `/trips/${tripSlug}/documents`,
       label: 'Documents',
       preview: documentsPreview,
       Icon: Folder,
-      tintBg: 'rgba(36, 55, 48, 0.12)',
-      tintFg: '#243730',
+      tintBg: 'rgba(14, 92, 134, 0.12)',    // deep teal-blue
+      tintFg: '#0E5C86',
     },
     {
       href: `/trips/${tripSlug}/checklist`,
       label: 'Packing Assist',
       preview: packingPreview,
       Icon: ListChecks,
-      tintBg: 'rgba(107, 39, 55, 0.10)',
-      tintFg: '#6B2737',
+      tintBg: 'rgba(199, 93, 93, 0.12)',    // deep coral
+      tintFg: '#C75D5D',
       progressPct: packingPct,
     },
     {
@@ -116,16 +116,16 @@ export function TripFeatureTiles({
       label: 'Forward bookings',
       preview: inboxPreview,
       Icon: Mail,
-      tintBg: 'rgba(92, 73, 56, 0.10)',
-      tintFg: '#5C4938',
+      tintBg: 'rgba(90, 113, 150, 0.12)',   // slate blue
+      tintFg: '#5A7196',
     },
     {
       href: `/trips/${tripSlug}/settings`,
       label: 'Trip settings',
       preview: settingsPreview,
       Icon: SettingsIcon,
-      tintBg: 'rgba(101, 101, 110, 0.10)',
-      tintFg: '#52525B',
+      tintBg: 'rgba(72, 86, 111, 0.12)',    // slate
+      tintFg: '#48566F',
     },
   ]
 

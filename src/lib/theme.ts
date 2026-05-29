@@ -15,10 +15,18 @@ export interface CountryTheme {
   scriptLine?: string
 }
 
+// All hero gradients now share the blue-forward identity: a deep Delft→Spanish
+// base with a Uranium-blue glow top-left and a Light-Coral glow top-right.
+// Per-destination character lives in the motif/scriptLine, not the colours.
+const URANIUM_GLOW = 'rgba(127,201,227,0.28)'
+const CORAL_GLOW = 'rgba(240,128,128,0.20)'
+const BLUE_BASE = 'linear-gradient(180deg, #14224A 0%, #163A6E 55%, #0B6FB8 125%)'
+const blueHero = (glowL = URANIUM_GLOW, glowR = CORAL_GLOW) =>
+  `radial-gradient(110% 60% at 15% 0%, ${glowL} 0%, transparent 60%), radial-gradient(80% 60% at 92% 12%, ${glowR} 0%, transparent 55%), ${BLUE_BASE}`
+
 export const themes: Record<ThemeKey, CountryTheme> = {
   'japan-autumn': {
-    heroGradient:
-      'radial-gradient(120% 60% at 20% 0%, rgba(216,150,149,0.55) 0%, transparent 60%), radial-gradient(80% 60% at 90% 10%, rgba(168,129,75,0.40) 0%, transparent 55%), linear-gradient(180deg, #1a2027 0%, #2c2018 55%, #3d2820 100%)',
+    heroGradient: blueHero('rgba(240,128,128,0.26)', 'rgba(127,201,227,0.24)'),
     heroPattern: 'asanoha',
     accentClass: 'bg-sakura',
     accentSoftClass: 'bg-sakura-soft',
@@ -26,41 +34,35 @@ export const themes: Record<ThemeKey, CountryTheme> = {
     scriptLine: 'Autumn',
   },
   'new-zealand': {
-    // Deep alpine night → tussock-gold glow → pohutukawa-red highlight in the corner
-    heroGradient:
-      'radial-gradient(120% 60% at 15% 0%, rgba(170,75,60,0.32) 0%, transparent 55%), radial-gradient(80% 60% at 92% 12%, rgba(178,138,72,0.38) 0%, transparent 60%), linear-gradient(180deg, #0c1820 0%, #122230 50%, #1d3344 100%)',
-    accentClass: 'bg-gold',
-    accentSoftClass: 'bg-gold-soft',
+    heroGradient: blueHero(),
+    accentClass: 'bg-sage',
+    accentSoftClass: 'bg-sage-soft',
     motif: 'NZ',
     scriptLine: 'Aotearoa',
   },
   'italy': {
-    heroGradient:
-      'radial-gradient(120% 60% at 20% 0%, rgba(229,180,80,0.55) 0%, transparent 60%), radial-gradient(80% 60% at 90% 10%, rgba(140,40,40,0.40) 0%, transparent 55%), linear-gradient(180deg, #2a1810 0%, #3d2218 55%, #5e2c1d 100%)',
-    accentClass: 'bg-gold',
-    accentSoftClass: 'bg-gold-soft',
+    heroGradient: blueHero('rgba(240,128,128,0.24)', 'rgba(127,201,227,0.26)'),
+    accentClass: 'bg-sakura',
+    accentSoftClass: 'bg-sakura-soft',
     motif: 'IT',
     scriptLine: 'Italia',
   },
   'iceland': {
-    heroGradient:
-      'radial-gradient(120% 60% at 20% 0%, rgba(180,210,230,0.55) 0%, transparent 60%), radial-gradient(80% 60% at 90% 10%, rgba(80,120,160,0.45) 0%, transparent 55%), linear-gradient(180deg, #0e1a26 0%, #1a2a3a 55%, #2c4458 100%)',
+    heroGradient: blueHero('rgba(127,201,227,0.40)', 'rgba(127,201,227,0.20)'),
     accentClass: 'bg-sage',
     accentSoftClass: 'bg-sage-soft',
     motif: 'IS',
     scriptLine: 'Ísland',
   },
   'thailand': {
-    heroGradient:
-      'radial-gradient(120% 60% at 20% 0%, rgba(240,200,90,0.55) 0%, transparent 60%), radial-gradient(80% 60% at 90% 10%, rgba(140,70,40,0.45) 0%, transparent 55%), linear-gradient(180deg, #1f1010 0%, #3a1c14 55%, #5e2e18 100%)',
-    accentClass: 'bg-gold',
-    accentSoftClass: 'bg-gold-soft',
+    heroGradient: blueHero('rgba(127,201,227,0.30)', 'rgba(240,128,128,0.24)'),
+    accentClass: 'bg-sage',
+    accentSoftClass: 'bg-sage-soft',
     motif: 'TH',
     scriptLine: 'ประเทศไทย',
   },
   'default': {
-    heroGradient:
-      'radial-gradient(80% 50% at 15% 0%, rgba(63,91,78,0.45) 0%, transparent 60%), linear-gradient(180deg, #1a1f1d 0%, #2a3530 100%)',
+    heroGradient: blueHero(),
     accentClass: 'bg-sage',
     accentSoftClass: 'bg-sage-soft',
   },

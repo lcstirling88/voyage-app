@@ -1,29 +1,38 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink: #0F1413;
-  --color-ink-soft: #2A2E2C;
-  --color-ink-muted: #7B7A72;
+  /* Blue-forward palette (Uranium / Spanish / Delft Blue + Light Coral).
+     Token NAMES are kept (sage, gold, sakura…) so the hundreds of existing
+     bg-sage / text-ink / text-sakura usages across the app pick up the new
+     colours without a sweeping rename — only the VALUES changed.
+       sage  → Spanish Blue (primary)
+       ink   → Delft Blue (text / dark)
+       sakura→ Light Coral (accent)
+       gold  → a brighter secondary blue
+       paper → cool mist background */
+  --color-ink: #1B2A55;        /* Delft Blue — text + dark surfaces */
+  --color-ink-soft: #2E3D63;
+  --color-ink-muted: #6E7E9E;  /* blue-grey */
 
-  --color-paper: #F6F2E9;
-  --color-paper-pure: #FBF8F1;
+  --color-paper: #F5F9FC;      /* cool mist */
+  --color-paper-pure: #FFFFFF;
   --color-paper-card: #FFFFFF;
 
-  --color-line: #E8E1D2;
-  --color-line-soft: #F1ECDF;
+  --color-line: #DCE6F0;
+  --color-line-soft: #EAF1F8;
 
-  --color-sage: #3F5B4E;
-  --color-sage-soft: #E4ECE5;
-  --color-sage-dark: #2A3D33;
+  --color-sage: #0B6FB8;       /* Spanish Blue — primary */
+  --color-sage-soft: #D9EAF6;
+  --color-sage-dark: #143A6B;
 
-  --color-gold: #A8814B;
-  --color-gold-soft: #EFE3CC;
+  --color-gold: #3E9BD4;       /* secondary bright blue (was gold) */
+  --color-gold-soft: #DCEEF8;
 
-  --color-sakura: #D89695;
-  --color-sakura-soft: #F4DEDD;
+  --color-sakura: #F08080;     /* Light Coral — accent */
+  --color-sakura-soft: #FCE3E3;
 
-  --color-wine: #7A2E2A;
-  --color-rust: #A55A3A;
+  --color-wine: #B5524F;       /* deep coral — readable on coral-soft */
+  --color-rust: #C2625C;       /* muted coral — warnings */
 
   --font-display: var(--font-fraunces), serif;
   --font-sans: var(--font-inter), system-ui, sans-serif;
@@ -50,9 +59,9 @@ body {
 
 .hero-light {
   background:
-    radial-gradient(80% 50% at 10% 0%, rgba(244,222,221,0.9) 0%, transparent 55%),
-    radial-gradient(60% 50% at 100% 30%, rgba(239,227,204,0.85) 0%, transparent 60%),
-    linear-gradient(180deg, #FBF8F1 0%, #F6F2E9 100%);
+    radial-gradient(80% 50% at 10% 0%, rgba(127,201,227,0.30) 0%, transparent 55%),
+    radial-gradient(60% 50% at 100% 30%, rgba(240,128,128,0.16) 0%, transparent 60%),
+    linear-gradient(180deg, #FFFFFF 0%, #F5F9FC 100%);
 }
 
 .pattern-asanoha {

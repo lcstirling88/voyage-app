@@ -10,7 +10,10 @@
 import Link from 'next/link'
 import { ArrowRight, User as UserIcon, Compass } from 'lucide-react'
 import { auth } from '@/lib/auth'
-import { ItineraBrand, ITINERA_BRAND_COLOR } from '@/components/ItineraBrand'
+import { ItineraBrand } from '@/components/ItineraBrand'
+
+const ROUTE_BLUE = '#0B6FB8'   // Spanish Blue — decorative route line
+const ROUTE_CORAL = '#F08080'  // Light Coral — origin/destination dots
 
 export default async function WelcomePage() {
   const session = await auth()
@@ -29,15 +32,15 @@ export default async function WelcomePage() {
       >
         <path
           d="M 80 620 Q 360 200 720 380 Q 980 480 1140 220"
-          stroke={ITINERA_BRAND_COLOR}
+          stroke={ROUTE_BLUE}
           strokeWidth="1.5"
           strokeDasharray="4 10"
-          opacity="0.18"
+          opacity="0.20"
           fill="none"
         />
-        <circle cx="80" cy="620" r="5" fill={ITINERA_BRAND_COLOR} opacity="0.28" />
-        <circle cx="720" cy="380" r="5" fill={ITINERA_BRAND_COLOR} opacity="0.28" />
-        <circle cx="1140" cy="220" r="5" fill={ITINERA_BRAND_COLOR} opacity="0.28" />
+        <circle cx="80" cy="620" r="5" fill={ROUTE_CORAL} opacity="0.4" />
+        <circle cx="720" cy="380" r="5" fill={ROUTE_CORAL} opacity="0.4" />
+        <circle cx="1140" cy="220" r="5" fill={ROUTE_CORAL} opacity="0.4" />
       </svg>
 
       {/* Top navigation. Left: section links the user asked for. Right: auth state. */}
@@ -83,8 +86,7 @@ export default async function WelcomePage() {
         <div className="mt-9 sm:mt-12 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
           <Link
             href={isAuthed ? '/trips' : '/signin'}
-            className="inline-flex items-center justify-center gap-2 text-sm font-medium px-6 py-3 rounded-md text-paper-pure hover:opacity-90 transition shadow-soft"
-            style={{ background: ITINERA_BRAND_COLOR }}
+            className="inline-flex items-center justify-center gap-2 text-sm font-medium px-6 py-3 rounded-md bg-sage text-paper-pure hover:opacity-90 transition shadow-soft"
           >
             {isAuthed ? 'Continue to your trips' : 'Begin your atlas'}
             <ArrowRight className="w-4 h-4" />
