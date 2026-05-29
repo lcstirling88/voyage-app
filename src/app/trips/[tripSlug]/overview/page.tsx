@@ -8,10 +8,11 @@
  */
 
 import { notFound } from 'next/navigation'
-import { differenceInDays } from 'date-fns'
+import { differenceInDays, format } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { fmtDate, fmtMoney } from '@/lib/format'
 import { getTheme } from '@/lib/theme'
+import { getTripSegments, activeSegment, isMultiCountry } from '@/lib/segments'
 import { TripCountdownDisplay } from '@/components/TripCountdownDisplay'
 import { TripFeatureTiles } from '@/components/TripFeatureTiles'
 
@@ -27,6 +28,11 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
     },
   })
   if (!trip) notFound()
+
+  // Trip legs (manual → auto-derived from hotels → implicit destination).
+  const segments = await getTripSegments(trip)
+  const multiCountry = isMultiCountry(segments)
+  const activeLeg = activeSegment(segments)
 
   const theme = getTheme(trip.themeKey)
   const totalBudget = trip.bookings.reduce((sum, b) => sum + (b.cost ?? 0), 0)
@@ -127,6 +133,35 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
           </div>
         </div>
       </div>
+
+      {/* Your route — only for genuinely multi-country trips. The active leg
+          (where you are now, or the next one) is highlighted. */}
+      {multiCountry && (
+        <div className="px-5 sm:px-10 pt-8 sm:pt-10">
+          <div className="max-w-5xl">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted mb-3">Your route</div>
+            <div className="flex flex-wrap items-center gap-2">
+              {segments.map((s, i) => {
+                const isActive = s === activeLeg
+                return (
+                  <div
+                    key={i}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
+                      isActive ? 'border-sage bg-sage-soft' : 'border-line bg-paper-pure'
+                    }`}
+                  >
+                    <span aria-hidden>{s.flag ?? '📍'}</span>
+                    <span className="font-medium">{s.country}</span>
+                    <span className="text-xs text-ink-muted num-mono">
+                      {format(s.startDate, 'd MMM')} – {format(s.endDate, 'd MMM')}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* App-launcher tiles — the entire navigation surface for this trip. */}
       <TripFeatureTiles

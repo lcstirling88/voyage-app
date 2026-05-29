@@ -15,6 +15,7 @@ import { prisma } from './db'
 import {
   profileForDestination, profileForIsoNumeric, currencySymbol,
 } from './destinations'
+import { geocodePlace } from './weather'
 
 export type ResolvedSegment = {
   /** Row id, or null for the implicit single-leg fallback. */
@@ -43,6 +44,65 @@ function resolveByIso(isoNumeric: string | null, country: string) {
   return p ?? profileForDestination(country)
 }
 
+/**
+ * Best-effort legs derived from accommodation bookings: geocode each hotel's
+ * location to a country, then merge consecutive same-country stays into legs.
+ * The first/last legs stretch to cover the whole trip (arrival/departure days).
+ * Returns [] when there are no hotels or none geocode — callers fall back to
+ * the implicit single destination leg. Geocoding is cached (30d), and distinct
+ * place strings are deduped + fetched in parallel to keep this cheap.
+ */
+async function deriveSegmentsFromBookings(trip: TripLike): Promise<ResolvedSegment[]> {
+  const hotels = await prisma.booking.findMany({
+    where: { tripId: trip.id, type: 'hotel' },
+    orderBy: { startAt: 'asc' },
+    select: { location: true, address: true, title: true, startAt: true, endAt: true },
+  })
+  if (hotels.length === 0) return []
+
+  const placeOf = (h: (typeof hotels)[number]) => (h.location || h.address || h.title || '').trim()
+  const distinct = [...new Set(hotels.map(placeOf).filter(Boolean))]
+  const geoEntries = await Promise.all(distinct.map(async (p) => [p, await geocodePlace(p)] as const))
+  const geoByPlace = new Map(geoEntries)
+
+  type Leg = { country: string; profile: ReturnType<typeof profileForDestination>; start: Date; end: Date }
+  const legs: Leg[] = []
+  for (const h of hotels) {
+    const geo = geoByPlace.get(placeOf(h))
+    if (!geo?.country) continue
+    const profile = profileForDestination(geo.country)
+    const country = profile.label && profile.label !== 'Unknown' ? profile.label : geo.country
+    const start = h.startAt
+    const end = h.endAt ?? h.startAt
+    const last = legs[legs.length - 1]
+    if (last && last.country === country) {
+      if (end > last.end) last.end = end
+    } else {
+      legs.push({ country, profile, start, end })
+    }
+  }
+  if (legs.length === 0) return []
+
+  // Stretch the ends so the whole trip window is covered (arrival/departure).
+  if (trip.startDate < legs[0].start) legs[0].start = trip.startDate
+  if (trip.endDate > legs[legs.length - 1].end) legs[legs.length - 1].end = trip.endDate
+
+  return legs.map((l) => {
+    const currency = l.profile.currency || 'USD'
+    return {
+      id: null,
+      country: l.country,
+      isoNumeric: l.profile.isoNumeric ?? null,
+      currency,
+      currencySymbol: currencySymbol(currency),
+      timezone: l.profile.timezone || 'UTC',
+      flag: l.profile.passportIcon ?? null,
+      startDate: l.start,
+      endDate: l.end,
+    }
+  })
+}
+
 /** All legs for a trip, resolved to currency/timezone/flag. Ordered by date. */
 export async function getTripSegments(trip: TripLike): Promise<ResolvedSegment[]> {
   const rows = await prisma.tripSegment.findMany({
@@ -67,6 +127,10 @@ export async function getTripSegments(trip: TripLike): Promise<ResolvedSegment[]
       }
     })
   }
+
+  // No manual legs — try to auto-derive them from accommodation bookings.
+  const auto = await deriveSegmentsFromBookings(trip)
+  if (auto.length > 0) return auto
 
   // Implicit single leg from the trip destination.
   const profile = profileForDestination(trip.destination)
