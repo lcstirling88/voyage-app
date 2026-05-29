@@ -1,54 +1,73 @@
 /**
- * "Let Itinera plan it" — preferences page.
+ * "Let Itinera plan it" — Step 1: the ROUTE.
  *
- * Itinera (Claude) generates destination-aware categories of taggable things
- * to do; the traveller ticks what they're into, sets a budget tier + pace, and
- * submits. generateTripPlan then drafts a day-by-day plan (grouped by area so
- * each day flows) and drops it onto the itinerary as removable suggestions.
+ * Before any booking exists, the traveller shapes the backbone of the trip:
+ * which cities to base in, in what order, for how many nights. Itinera can
+ * propose a route or they can build it by hand. This skeleton is what makes
+ * planning-from-zero work — it colours the calendar and anchors the day-by-day
+ * planner (Step 2, /plan/days) even with nothing booked.
  *
- * Renders inside the trip layout (top bar / breadcrumb), so this is just the
- * page body.
+ * Renders inside the trip layout, so this is just the page body.
  */
 
-import { Sparkles } from 'lucide-react'
+import { differenceInDays, format, startOfDay } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
-import { getTripSegments } from '@/lib/segments'
 import { cityForBooking } from '@/lib/itinerary'
-import { generatePlanOptions } from '@/lib/trip-planner'
-import { PlanTripFormClient } from '@/components/PlanTripFormClient'
+import { mapRowsToSkeleton } from '@/lib/skeleton'
+import type { RouteStopDTO } from '@/lib/actions'
+import { RoutePlannerClient } from '@/components/RoutePlannerClient'
+import { PlanSteps } from '@/components/PlanSteps'
 
-export default async function PlanPage({ params }: { params: Promise<{ tripSlug: string }> }) {
+export default async function PlanRoutePage({ params }: { params: Promise<{ tripSlug: string }> }) {
   const { tripSlug } = await params
   const { trip } = await requireTripAccess(tripSlug)
-  // Confine options to the cities the trip actually visits (where they stay),
-  // falling back to the trip's countries if there are no hotels yet.
-  const hotels = await prisma.booking.findMany({
-    where: { tripId: trip.id, type: 'hotel' },
-    select: { location: true, address: true },
-  })
-  const hotelCities = [...new Set(hotels.map((h) => cityForBooking(h)).filter((c): c is string => !!c))]
-  const cities = hotelCities.length
-    ? hotelCities.join(', ')
-    : (await getTripSegments(trip)).map((s) => s.country).join(', ')
-  const categories = await generatePlanOptions(trip.destination, cities)
+
+  // Prefer an existing route skeleton. If there's none (or only the legacy
+  // full-span seed), pre-fill the editor from hotel bookings so an
+  // already-booked trip starts with a sensible, editable route.
+  const cityRows = await prisma.city.findMany({ where: { tripId: trip.id } })
+  const skeleton = mapRowsToSkeleton(cityRows, trip.startDate, trip.endDate)
+
+  let initialStops: RouteStopDTO[]
+  if (skeleton.scheduled) {
+    initialStops = skeleton.stops.map((s) => ({ city: s.city, country: s.country, nights: s.nights, note: s.note }))
+  } else {
+    const hotels = await prisma.booking.findMany({
+      where: { tripId: trip.id, type: 'hotel' },
+      orderBy: { startAt: 'asc' },
+      select: { location: true, address: true, startAt: true, endAt: true },
+    })
+    const seeded: RouteStopDTO[] = []
+    for (const h of hotels) {
+      const city = cityForBooking(h)
+      if (!city) continue
+      const nights = h.endAt
+        ? Math.max(1, differenceInDays(startOfDay(h.endAt), startOfDay(h.startAt)))
+        : 1
+      const last = seeded[seeded.length - 1]
+      if (last && last.city === city) last.nights += nights
+      else seeded.push({ city, country: trip.destination, nights, note: null })
+    }
+    initialStops = seeded
+  }
 
   return (
     <div className="px-5 sm:px-10 py-8 sm:py-12 max-w-3xl">
-      <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted flex items-center gap-2">
-        <Sparkles className="w-3 h-3" /> Plan with Itinera
-      </div>
-      <h1 className="h-display text-4xl sm:text-5xl mt-2">What are you into?</h1>
+      <PlanSteps tripSlug={trip.slug} current="route" />
+      <h1 className="h-display text-4xl sm:text-5xl mt-5">Shape your route</h1>
       <p className="text-ink-muted mt-3 max-w-xl text-sm sm:text-base leading-relaxed">
-        Tick what you&rsquo;d love to do in {trip.destination}, set a budget and a pace, and Itinera will fill
-        your days with ideas — grouping things that are close together so each day flows. They arrive as
-        removable suggestions on your itinerary, nothing booked.
+        Where will you base yourself in {trip.destination}, and for how long? Let Itinera propose a route that flows,
+        or build your own. We&rsquo;ll spread your nights across the trip and land you home on the right day — then you
+        fill each day with things to do.
       </p>
 
-      <PlanTripFormClient
+      <RoutePlannerClient
         tripSlug={trip.slug}
-        categories={categories}
-        currency={trip.homeCurrency}
+        destination={trip.destination}
+        startDateISO={format(trip.startDate, 'yyyy-MM-dd')}
+        endDateISO={format(trip.endDate, 'yyyy-MM-dd')}
+        initialStops={initialStops}
       />
     </div>
   )

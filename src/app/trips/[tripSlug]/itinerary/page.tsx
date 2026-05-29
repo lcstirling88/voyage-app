@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import {
   Check, Clock, Utensils, Plane, Train, Car, BedDouble, LogOut, Plus, AlertTriangle, ArrowRight,
   Mountain, Telescope, Footprints, Sailboat, Wine, Bike, Camera, Landmark,
-  Fish, Flag, Sparkles, Coffee, Music, Waves, Tent, TreePine, Heart,
+  Fish, Flag, Sparkles, Coffee, Music, Waves, Tent, TreePine, Heart, MapPin, StickyNote,
   type LucideIcon,
 } from 'lucide-react'
 import { format, startOfDay, eachDayOfInterval, differenceInDays } from 'date-fns'
@@ -12,20 +12,45 @@ import { requireTripAccess } from '@/lib/session'
 import { fmtTime, safeJson, fmtMoneyFull } from '@/lib/format'
 import { InlineDeleteButton } from '@/components/InlineDeleteButton'
 import { ConfirmSuggestionButton } from '@/components/ConfirmSuggestionButton'
+import { SwapSuggestionButton } from '@/components/SwapSuggestionButton'
+import { RegenerateDayButton } from '@/components/RegenerateDayButton'
+import { BookItButton } from '@/components/BookItButton'
+import { MarkBookedButton } from '@/components/MarkBookedButton'
 import { clearTripSuggestions } from '@/lib/actions'
+import { bookingLinkFor } from '@/lib/affiliates'
 import {
   planForDay, SESSIONS, SESSION_LABEL, formatTime,
-  hotelOrderForTrip, sleepingTonightFor, getPalette, colorForHotel,
+  hotelOrderForTrip, sleepingTonightFor, getPalette, colorForHotel, colorForCity,
   cleanHotelName, cityForBooking, cityOrderForTrip,
   type DayPlan, type Session, type SessionItem, type ParsedTime, type PaletteSpec,
 } from '@/lib/itinerary'
+import { mapRowsToSkeleton, cityForDate, citiesInOrder } from '@/lib/skeleton'
+import { computePlanBudget } from '@/lib/budget'
+import { PlanBudgetBar } from '@/components/PlanBudgetBar'
 import { profileForDestination } from '@/lib/destinations'
 import { TripCalendarStrip } from '@/components/TripCalendarStrip'
+import { EmptyTripDoors } from '@/components/EmptyTripDoors'
+import { QuickAddRow } from '@/components/QuickAddRow'
+import { RetimeButton } from '@/components/RetimeButton'
+import { ScrollToToday } from '@/components/ScrollToToday'
 import type { Booking } from '@prisma/client'
+
+/** A booking's start time as a 24h HH:mm string (times are stored UTC wall-clock). */
+function hhmmOf(d: Date): string {
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
+}
+
+/** Item types that can be freely retimed/reordered inline (not transport facts). */
+const RETIMEABLE_TYPES = new Set(['activity', 'restaurant', 'note', 'other'])
 
 /** True if a booking is an unconfirmed AI suggestion (dashed placeholder). */
 function isSuggestedBooking(b: Booking): boolean {
-  return (safeJson<{ __suggested?: boolean }>(b.metadata) ?? {}).__suggested === true
+  return b.status === 'idea'
+}
+
+/** True while a kept item is on its way to being booked (planned or out-to-book). */
+function isPlanningBooking(b: Booking): boolean {
+  return b.status === 'planned' || b.status === 'to_book'
 }
 
 /**
@@ -78,31 +103,54 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
   await requireTripAccess(tripSlug)
   const trip = await prisma.trip.findUnique({
     where: { slug: tripSlug },
-    include: { bookings: { orderBy: { startAt: 'asc' } } },
+    include: { bookings: { orderBy: { startAt: 'asc' } }, cities: true },
   })
   if (!trip) notFound()
 
   const days = eachDayOfInterval({ start: startOfDay(trip.startDate), end: startOfDay(trip.endDate) })
 
+  // The route "skeleton" (cities + nights) is the planning backbone — it lets a
+  // trip carry a where-am-I-based timeline BEFORE any booking exists.
+  const skeleton = mapRowsToSkeleton(trip.cities, trip.startDate, trip.endDate)
+  const hasRoute = skeleton.scheduled
+  const hasBookings = trip.bookings.length > 0
+  // The blank page: nothing booked AND no route drafted yet → show the doors.
+  const isEmpty = !hasBookings && !hasRoute
+
   // Stable per-trip hotel colour assignment
   const hotelOrder = hotelOrderForTrip(trip.bookings)
   const palette = getPalette(trip.colorPalette)
 
-  // For the overview calendar: derive a city per trip night (from the hotel
-  // booking that covers that night) and a chronological city order for stable
-  // palette indexing. Same colour for any night spent in the same city.
+  // The budget loop: experiences + dining spend by commitment level vs the
+  // traveller's stated budget. Drives the bar above the day-by-day blocks.
+  const planBudget = computePlanBudget(trip.bookings, {
+    homeCurrency: trip.homeCurrency,
+    partySize: Math.max(1, trip.adultCount + trip.childCount),
+    tripStart: trip.startDate,
+    tripEnd: trip.endDate,
+  })
+
+  // For the overview calendar: each night's city is where they SLEEP (hotel) if
+  // booked, otherwise where the route has them BASED (skeleton). City order is
+  // hotel cities first (chronological) then any route-only cities, so colours
+  // stay stable as bookings get added.
   const cityOrder = cityOrderForTrip(trip.bookings)
+  for (const c of hasRoute ? citiesInOrder(skeleton.stops) : []) {
+    if (!cityOrder.includes(c)) cityOrder.push(c)
+  }
   const daysByDate = new Map<string, { city: string | null }>()
   for (const day of days) {
     const sleeping = sleepingTonightFor(day, trip.bookings)
-    daysByDate.set(format(day, 'yyyy-MM-dd'), {
-      city: sleeping ? cityForBooking(sleeping) : null,
-    })
+    const hotelCity = sleeping ? cityForBooking(sleeping) : null
+    const plannedCity = hasRoute ? cityForDate(skeleton.stops, day, trip.endDate) : null
+    daysByDate.set(format(day, 'yyyy-MM-dd'), { city: hotelCity ?? plannedCity })
   }
 
-  // Highlights today's cell in the calendar strip. Will only have a visible
-  // effect once today falls inside the trip's date range.
+  // Highlights today's cell in the calendar strip + day block. Only has a
+  // visible effect once today falls inside the trip's date range.
   const today = new Date()
+  const todayKey = format(today, 'yyyy-MM-dd')
+  const todayInTrip = days.some((d) => format(d, 'yyyy-MM-dd') === todayKey)
 
   // Iconic destination photo + country label for the hero. Falls back to the
   // existing gradient header for destinations we don't have a curated image for.
@@ -154,65 +202,93 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
         </div>
       )}
 
-      <TripCalendarStrip
-        startDate={trip.startDate}
-        endDate={trip.endDate}
-        daysByDate={daysByDate}
-        cityOrder={cityOrder}
-        palette={palette}
-        tripSlug={trip.slug}
-        today={today}
-      />
+      {isEmpty ? (
+        <EmptyTripDoors tripSlug={trip.slug} destination={trip.destination} />
+      ) : (
+        <>
+          <TripCalendarStrip
+            startDate={trip.startDate}
+            endDate={trip.endDate}
+            daysByDate={daysByDate}
+            cityOrder={cityOrder}
+            palette={palette}
+            tripSlug={trip.slug}
+            today={today}
+          />
 
-      {/* Plan-with-AI CTA — between the calendar and the day-by-day blocks. */}
-      <div className="px-4 sm:px-10 pt-6 sm:pt-8 max-w-5xl">
-        <Link
-          href={`/trips/${trip.slug}/plan`}
-          className="group flex items-center gap-3 rounded-2xl border border-dashed border-sage/50 bg-sage-soft/30 px-5 py-4 hover:bg-sage-soft/50 hover:border-sage transition"
-        >
-          <Sparkles className="w-5 h-5 text-sage shrink-0" />
-          <div className="min-w-0 flex-1">
-            <div className="font-display text-base sm:text-lg leading-tight">Let Itinera plan the rest</div>
-            <div className="text-xs text-ink-muted mt-0.5">
-              Tick what you&rsquo;re into and a budget — we&rsquo;ll fill your days with ideas that flow.
-            </div>
+          {/* Plan-with-AI CTA — between the calendar and the day-by-day blocks.
+              Points at the route step until a route exists, then straight at
+              the fill-the-days step. */}
+          <div className="px-4 sm:px-10 pt-6 sm:pt-8 max-w-5xl">
+            <Link
+              href={hasRoute ? `/trips/${trip.slug}/plan/days` : `/trips/${trip.slug}/plan`}
+              className="group flex items-center gap-3 rounded-2xl border border-dashed border-sage/50 bg-sage-soft/30 px-5 py-4 hover:bg-sage-soft/50 hover:border-sage transition"
+            >
+              <Sparkles className="w-5 h-5 text-sage shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="font-display text-base sm:text-lg leading-tight">
+                  {hasRoute ? 'Fill your days with ideas' : 'Let Itinera plan the rest'}
+                </div>
+                <div className="text-xs text-ink-muted mt-0.5">
+                  {hasRoute
+                    ? 'Your route’s set — tick what you’re into and we’ll suggest things to do that flow.'
+                    : 'Map your route, then tick what you’re into — we’ll fill your days with ideas.'}
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-ink-muted group-hover:text-ink transition shrink-0" />
+            </Link>
+            {trip.bookings.some(isSuggestedBooking) && (
+              <form action={clearTripSuggestions} className="mt-2 text-right">
+                <input type="hidden" name="tripSlug" value={trip.slug} />
+                <button type="submit" className="text-[11px] uppercase tracking-[0.18em] text-ink-muted hover:text-rust ulink">
+                  Clear all suggestions
+                </button>
+              </form>
+            )}
+            {planBudget.itemCount > 0 && (
+              <div className="mt-4">
+                <PlanBudgetBar data={planBudget} />
+              </div>
+            )}
           </div>
-          <ArrowRight className="w-4 h-4 text-ink-muted group-hover:text-ink transition shrink-0" />
-        </Link>
-        {trip.bookings.some(isSuggestedBooking) && (
-          <form action={clearTripSuggestions} className="mt-2 text-right">
-            <input type="hidden" name="tripSlug" value={trip.slug} />
-            <button type="submit" className="text-[11px] uppercase tracking-[0.18em] text-ink-muted hover:text-rust ulink">
-              Clear all suggestions
-            </button>
-          </form>
-        )}
-      </div>
 
-      <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-5xl space-y-10 sm:space-y-12">
-        {days.map((day, idx) => {
-          const plan = planForDay(day, trip.bookings)
-          const dateKey = format(day, 'yyyy-MM-dd')
-          const sleepingTonight = sleepingTonightFor(day, trip.bookings)
-          const hotelColor = sleepingTonight
-            ? colorForHotel(sleepingTonight.id, hotelOrder, palette)
-            : null
-          return (
-            <DayBlock
-              key={dateKey}
-              day={day}
-              dateKey={dateKey}
-              idx={idx}
-              plan={plan}
-              tripSlug={trip.slug}
-              homeCurrency={trip.homeCurrency}
-              sleepingTonight={sleepingTonight}
-              hotelColor={hotelColor}
-              paletteTextColor={palette.textOnColor}
-            />
-          )
-        })}
-      </div>
+          {todayInTrip && <ScrollToToday targetId={`day-${todayKey}`} />}
+
+          <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-5xl space-y-10 sm:space-y-12">
+            {days.map((day, idx) => {
+              const plan = planForDay(day, trip.bookings)
+              const dateKey = format(day, 'yyyy-MM-dd')
+              const sleepingTonight = sleepingTonightFor(day, trip.bookings)
+              const hotelColor = sleepingTonight
+                ? colorForHotel(sleepingTonight.id, hotelOrder, palette)
+                : null
+              // No hotel for tonight, but the route has them based somewhere →
+              // show a "planned" hint instead of a blank "no accommodation".
+              const plannedCity = !sleepingTonight && hasRoute
+                ? cityForDate(skeleton.stops, day, trip.endDate)
+                : null
+              const plannedColor = plannedCity ? colorForCity(plannedCity, cityOrder, palette) : null
+              return (
+                <DayBlock
+                  key={dateKey}
+                  day={day}
+                  dateKey={dateKey}
+                  idx={idx}
+                  isToday={dateKey === todayKey}
+                  plan={plan}
+                  tripSlug={trip.slug}
+                  homeCurrency={trip.homeCurrency}
+                  sleepingTonight={sleepingTonight}
+                  hotelColor={hotelColor}
+                  plannedCity={plannedCity}
+                  plannedColor={plannedColor}
+                  paletteTextColor={palette.textOnColor}
+                />
+              )
+            })}
+          </div>
+        </>
+      )}
     </>
   )
 }
@@ -222,26 +298,35 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
 // ============================================================================
 
 function DayBlock({
-  day, dateKey, idx, plan, tripSlug, homeCurrency, sleepingTonight, hotelColor, paletteTextColor,
+  day, dateKey, idx, isToday, plan, tripSlug, homeCurrency, sleepingTonight, hotelColor, plannedCity, plannedColor, paletteTextColor,
 }: {
   day: Date
   dateKey: string
   idx: number
+  isToday: boolean
   plan: DayPlan
   tripSlug: string
   homeCurrency: string
   sleepingTonight: import('@prisma/client').Booking | null
   hotelColor: string | null
+  plannedCity: string | null
+  plannedColor: string | null
   paletteTextColor: string
 }) {
+  // Show "Reimagine day" only when this day actually renders AI suggestions.
+  const dayHasSuggestions = SESSIONS.some((s) =>
+    plan.sessions[s].some((it) => it.kind === 'booking' && isSuggestedBooking(it.booking)),
+  )
   return (
     <div id={`day-${dateKey}`} className="tline pl-8 sm:pl-10 scroll-mt-24 sm:scroll-mt-20">
-      <div className="tline-dot" />
+      <div className="tline-dot" style={isToday ? { boxShadow: '0 0 0 4px var(--color-sage-soft)' } : undefined} />
       <div className="flex items-center gap-3 mb-2">
         <span className="font-display text-3xl sm:text-4xl">
           {format(day, 'MMM d')} <span className="text-ink-muted">({format(day, 'EEE')})</span>
         </span>
+        {isToday && <span className="pill pill-info shrink-0">Today</span>}
         <span className="flex-1" />
+        {dayHasSuggestions && <RegenerateDayButton tripSlug={tripSlug} date={dateKey} />}
         <Link
           href={`/trips/${tripSlug}/itinerary/add?date=${dateKey}`}
           aria-label="Add to this day"
@@ -268,7 +353,16 @@ function DayBlock({
           </span>
         </div>
       )}
-      {!sleepingTonight && (
+      {!sleepingTonight && plannedCity && (
+        <div
+          className="rounded-md px-3 py-1.5 mb-5 text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 border border-dashed bg-paper-pure/40"
+          style={{ borderColor: plannedColor ?? undefined, color: plannedColor ?? undefined }}
+        >
+          <MapPin className="w-3 h-3" />
+          <span className="truncate font-medium">Based in {plannedCity} · planned</span>
+        </div>
+      )}
+      {!sleepingTonight && !plannedCity && (
         <div className="text-[10px] uppercase tracking-[0.2em] text-ink-muted/50 mb-5 italic">
           No accommodation tonight
         </div>
@@ -314,26 +408,18 @@ function SessionBlock({
         <span className="flex-1 h-px bg-line-soft" />
       </div>
 
-      {items.length === 0 ? (
-        <Link
-          href={`/trips/${tripSlug}/itinerary/add?date=${dateKey}&session=${session}`}
-          className="text-xs text-ink-muted/60 italic hover:text-ink-muted transition px-1"
-        >
-          Nothing planned · tap <span className="num-mono">+</span> above to add
-        </Link>
-      ) : (
-        <div className="space-y-2">
-          {items.map((item, i) => (
-            <ItemRow
-              key={item.kind === 'booking' ? item.booking.id + ':' + i : item.kind + ':' + item.booking.id + ':' + i}
-              item={item}
-              tripSlug={tripSlug}
-              currentDate={currentDate}
-              homeCurrency={homeCurrency}
-            />
-          ))}
-        </div>
-      )}
+      <div className="space-y-2">
+        {items.map((item, i) => (
+          <ItemRow
+            key={item.kind === 'booking' ? item.booking.id + ':' + i : item.kind + ':' + item.booking.id + ':' + i}
+            item={item}
+            tripSlug={tripSlug}
+            currentDate={currentDate}
+            homeCurrency={homeCurrency}
+          />
+        ))}
+        <QuickAddRow tripSlug={tripSlug} date={dateKey} session={session} />
+      </div>
     </div>
   )
 }
@@ -362,8 +448,11 @@ function ItemRow({
     case 'car-return':
       return <CarRow booking={item.booking} kind="return" time={item.time} tripSlug={tripSlug} />
     case 'booking':
+      if (item.booking.type === 'note') {
+        return <NoteRow booking={item.booking} tripSlug={tripSlug} />
+      }
       if (item.booking.type === 'restaurant') {
-        return <RestaurantRow booking={item.booking} tripSlug={tripSlug} />
+        return <RestaurantRow booking={item.booking} tripSlug={tripSlug} homeCurrency={homeCurrency} />
       }
       return <BookingRow booking={item.booking} position={item.position} tripSlug={tripSlug} homeCurrency={homeCurrency} currentDate={currentDate} />
   }
@@ -463,6 +552,24 @@ function StayingTonightRow({ booking }: { booking: Booking }) {
 }
 
 // ============================================================================
+// Note row — a loose, non-booking jotting (type 'note'). No time, no cost, no
+// book-it lifecycle: just a line you can retime into another session or bin.
+// ============================================================================
+
+function NoteRow({ booking, tripSlug }: { booking: Booking; tripSlug: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-line bg-paper/40 p-3 sm:p-4 flex items-start gap-3">
+      <StickyNote className="w-4 h-4 text-ink-muted/70 shrink-0 mt-0.5" />
+      <p className="flex-1 min-w-0 text-sm leading-snug">{booking.title}</p>
+      <div className="flex items-center gap-1 shrink-0">
+        <RetimeButton id={booking.id} tripSlug={tripSlug} currentTime={hhmmOf(booking.startAt)} />
+        <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
 // Car rental row
 // ============================================================================
 
@@ -508,7 +615,7 @@ function CarRow({
 // extra info the restaurant supplied (notes, dress code, allergens, etc.).
 // ============================================================================
 
-function RestaurantRow({ booking, tripSlug }: { booking: Booking; tripSlug: string }) {
+function RestaurantRow({ booking, tripSlug, homeCurrency }: { booking: Booking; tripSlug: string; homeCurrency: string }) {
   const meta = safeJson<Record<string, string | number>>(booking.metadata) ?? {}
   // The parser is asked to put the reservation holder's name in metadata.bookedUnder;
   // older parses might have it under different keys, so check a few common shapes.
@@ -519,11 +626,20 @@ function RestaurantRow({ booking, tripSlug }: { booking: Booking; tripSlug: stri
     ? String(partySizeRaw)
     : null
   const timeLabel = fmtTime(booking.startAt)
-  const suggested = (meta as Record<string, unknown>).__suggested === true
+  const isIdea = isSuggestedBooking(booking)
+  const isPlanning = isPlanningBooking(booking)
+  // For a kept restaurant, "Reserve" deep-links out to find & book the table.
+  const link = isPlanning ? bookingLinkFor(booking) : null
+
+  const cardTone = isIdea
+    ? 'border-dashed border-sage/50 bg-sage-soft/40'
+    : isPlanning
+      ? 'border-sage/40 bg-sage-soft/20 hover:border-sage'
+      : 'border-line bg-paper-pure hover:border-sage'
 
   return (
-    <div className={`rounded-xl p-3 sm:p-4 border transition ${suggested ? 'border-dashed border-sage/50 bg-sage-soft/40' : 'border-line bg-paper-pure hover:border-sage'}`}>
-      {/* Header line: Utensils icon + Restaurant · time on left, delete on right */}
+    <div className={`rounded-xl p-3 sm:p-4 border transition ${cardTone}`}>
+      {/* Header line: Utensils icon + Restaurant · time on left, controls on right */}
       <div className="flex items-center justify-between gap-3">
         <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2 min-w-0">
           <Utensils className="w-3 h-3 shrink-0" />
@@ -532,10 +648,19 @@ function RestaurantRow({ booking, tripSlug }: { booking: Booking; tripSlug: stri
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {suggested && (
+          {isIdea && (
             <span className="pill" style={{ background: 'var(--color-sage-soft)', color: 'var(--color-sage-dark)' }}><Sparkles className="w-3 h-3" /> Suggested</span>
           )}
-          {suggested && <ConfirmSuggestionButton id={booking.id} tripSlug={tripSlug} />}
+          {isPlanning && (
+            booking.status === 'planned'
+              ? <span className="pill pill-info"><Check className="w-3 h-3" /> Planned</span>
+              : <span className="pill pill-upcoming"><Clock className="w-3 h-3" /> Booking…</span>
+          )}
+          {isIdea && <SwapSuggestionButton id={booking.id} tripSlug={tripSlug} />}
+          {isIdea && <ConfirmSuggestionButton id={booking.id} tripSlug={tripSlug} />}
+          {isPlanning && link && <BookItButton id={booking.id} tripSlug={tripSlug} url={link.url} label={link.label} />}
+          {isPlanning && <MarkBookedButton id={booking.id} tripSlug={tripSlug} />}
+          {!isIdea && <RetimeButton id={booking.id} tripSlug={tripSlug} currentTime={hhmmOf(booking.startAt)} />}
           <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
         </div>
       </div>
@@ -543,6 +668,7 @@ function RestaurantRow({ booking, tripSlug }: { booking: Booking; tripSlug: stri
       {/* Linked body — restaurant name, who it's booked under, address */}
       <Link href={`/trips/${tripSlug}/booking/${booking.id}`} className="block">
         <h3 className="font-medium text-sm sm:text-base mt-1.5 leading-tight">{booking.title}</h3>
+        {(isIdea || isPlanning) && booking.notes && <p className="text-xs text-ink-muted italic mt-1">{booking.notes}</p>}
         {bookedUnder && <p className="text-xs text-ink-muted mt-1">Booked under {bookedUnder}</p>}
         {booking.address && <p className="text-xs text-ink-muted mt-1">{booking.address}</p>}
       </Link>
@@ -588,19 +714,33 @@ function BookingRow({
   const Icon = iconForBooking(booking.type, booking.title)
   const typeLabel = typeLabelFor(booking.type)
   const timeLabel = fmtTime(booking.startAt)
-  const suggested = (safeJson<{ __suggested?: boolean }>(booking.metadata) ?? {}).__suggested === true
+  const isIdea = isSuggestedBooking(booking)
+  const isPlanning = isPlanningBooking(booking)
+  // The "Book it" deep-link (Booking.com / GetYourGuide / Maps / Flights),
+  // built only for kept-but-unbooked items — this is the monetisable moment.
+  const link = isPlanning ? bookingLinkFor(booking) : null
+
+  const cardTone = isIdea
+    ? 'border-dashed border-sage/50 bg-sage-soft/40'
+    : isPlanning
+      ? 'border-sage/40 bg-sage-soft/20 hover:border-sage'
+      : 'border-line bg-paper-pure hover:border-sage'
 
   return (
-    <div className={`rounded-xl p-3 sm:p-4 border transition ${suggested ? 'border-dashed border-sage/50 bg-sage-soft/40' : 'border-line bg-paper-pure hover:border-sage'}`}>
-      {/* Header line: contextual icon + type · time on left, status pill + delete on right */}
+    <div className={`rounded-xl p-3 sm:p-4 border transition ${cardTone}`}>
+      {/* Header line: contextual icon + type · time on left, status pill + controls on right */}
       <div className="flex items-center justify-between gap-3">
         <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2 min-w-0">
           <Icon className="w-3 h-3 shrink-0" />
           <span className="truncate">{typeLabel}{timeLabel ? ` · ${timeLabel}` : ''}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {suggested ? (
+          {isIdea ? (
             <span className="pill" style={{ background: 'var(--color-sage-soft)', color: 'var(--color-sage-dark)' }}><Sparkles className="w-3 h-3" /> Suggested</span>
+          ) : isPlanning ? (
+            booking.status === 'planned'
+              ? <span className="pill pill-info"><Check className="w-3 h-3" /> Planned</span>
+              : <span className="pill pill-upcoming"><Clock className="w-3 h-3" /> Booking…</span>
           ) : booking.paid ? (
             <span className="pill pill-paid"><Check className="w-3 h-3" /> Paid</span>
           ) : booking.paymentMethod === 'Pay at venue' ? (
@@ -608,7 +748,11 @@ function BookingRow({
           ) : booking.cost ? (
             <span className="pill pill-upcoming"><Clock className="w-3 h-3" /> Pending</span>
           ) : null}
-          {suggested && <ConfirmSuggestionButton id={booking.id} tripSlug={tripSlug} />}
+          {isIdea && <SwapSuggestionButton id={booking.id} tripSlug={tripSlug} />}
+          {isIdea && <ConfirmSuggestionButton id={booking.id} tripSlug={tripSlug} />}
+          {isPlanning && link && <BookItButton id={booking.id} tripSlug={tripSlug} url={link.url} label={link.label} />}
+          {isPlanning && <MarkBookedButton id={booking.id} tripSlug={tripSlug} />}
+          {!isIdea && RETIMEABLE_TYPES.has(booking.type) && <RetimeButton id={booking.id} tripSlug={tripSlug} currentTime={hhmmOf(booking.startAt)} />}
           <InlineDeleteButton kind="booking" id={booking.id} tripSlug={tripSlug} />
         </div>
       </div>
@@ -631,7 +775,13 @@ function BookingRow({
           <div className="text-xs text-ink-muted mt-2 flex flex-wrap items-center gap-x-2">
             {booking.confirmationCode && <span className="num-mono">{booking.confirmationCode}</span>}
             {booking.confirmationCode && booking.cost && <span className="opacity-50">·</span>}
-            {booking.cost && <span>{fmtMoneyFull(booking.cost, booking.currency ?? homeCurrency)}</span>}
+            {booking.cost && (
+              <span>
+                {isIdea || isPlanning
+                  ? `est. ${fmtMoneyFull(booking.cost, booking.currency ?? homeCurrency)} pp`
+                  : fmtMoneyFull(booking.cost, booking.currency ?? homeCurrency)}
+              </span>
+            )}
           </div>
         )}
       </Link>

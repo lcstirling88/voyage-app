@@ -72,15 +72,60 @@ function modeOf(xs: number[]): number {
   return best
 }
 
-export async function geocodePlace(name: string): Promise<GeoResult | null> {
+type GeoCandidate = {
+  latitude: number
+  longitude: number
+  name: string
+  country?: string
+  country_code?: string
+}
+
+/**
+ * Choose the best geocoding candidate. Open-Meteo ranks purely by population,
+ * so an ambiguous name resolves to the world's most populous match — e.g. bare
+ * "Queenstown" lands in South Africa (pop ~119k), not the New Zealand resort
+ * town (pop ~10k). With a country hint we prefer an exact country match (name
+ * or ISO-2 code), then a loose substring match; otherwise — and as the ultimate
+ * fallback — we take Open-Meteo's population-ranked first hit.
+ */
+function pickGeoCandidate(results: GeoCandidate[], hint: string): GeoCandidate | undefined {
+  if (results.length === 0) return undefined
+  if (hint) {
+    const h = hint.toLowerCase()
+    const exact = results.find(
+      (r) => (r.country ?? '').toLowerCase() === h || (r.country_code ?? '').toLowerCase() === h,
+    )
+    if (exact) return exact
+    const loose = results.find((r) => {
+      const c = (r.country ?? '').toLowerCase()
+      return c.length > 0 && (c.includes(h) || h.includes(c))
+    })
+    if (loose) return loose
+  }
+  return results[0]
+}
+
+/**
+ * Resolve a place name to coordinates. Pass `countryHint` (a country name, e.g.
+ * the trip's destination country) whenever the caller knows it — without it,
+ * ambiguous city names resolve to the most populous match worldwide, which is
+ * how a Queenstown, NZ hotel was being placed in South Africa.
+ */
+export async function geocodePlace(
+  name: string,
+  opts?: { countryHint?: string | null },
+): Promise<GeoResult | null> {
   if (!name?.trim()) return null
+  const hint = opts?.countryHint?.trim() ?? ''
   const q = encodeURIComponent(name.split(',')[0].trim())
-  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${q}&count=1&language=en&format=json`
+  // A hint is only useful if we have several candidates to choose between.
+  const count = hint ? 10 : 1
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${q}&count=${count}&language=en&format=json`
   try {
     const res = await fetch(url, { next: { revalidate: 60 * 60 * 24 * 30 } })
     if (!res.ok) return null
     const data = await res.json()
-    const hit = data?.results?.[0]
+    const hit = pickGeoCandidate(data?.results ?? [], hint)
     if (!hit) return null
     return { lat: hit.latitude, lon: hit.longitude, label: hit.name, country: hit.country ?? '' }
   } catch {

@@ -13,6 +13,7 @@ import { prisma } from '@/lib/db'
 import { fmtDate, fmtMoney } from '@/lib/format'
 import { getTheme } from '@/lib/theme'
 import { getTripSegments, activeSegment, isMultiCountry } from '@/lib/segments'
+import { bookingPartyCost, isCommittedStatus } from '@/lib/budget'
 import { TripCountdownDisplay } from '@/components/TripCountdownDisplay'
 import { TripFeatureTiles } from '@/components/TripFeatureTiles'
 
@@ -22,9 +23,9 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
     where: { slug: tripSlug },
     include: {
       cities: { select: { id: true } },
-      bookings: { select: { cost: true, paid: true } },
+      bookings: { select: { cost: true, paid: true, status: true } },
       checklistItems: { select: { done: true } },
-      _count: { select: { bookings: true, documents: true, emails: { where: { processed: false } } } },
+      _count: { select: { bookings: { where: { type: { not: 'note' } } }, documents: true, emails: { where: { processed: false } } } },
     },
   })
   if (!trip) notFound()
@@ -35,8 +36,12 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
   const activeLeg = activeSegment(segments)
 
   const theme = getTheme(trip.themeKey)
-  const totalBudget = trip.bookings.reduce((sum, b) => sum + (b.cost ?? 0), 0)
-  const paidSoFar = trip.bookings.filter((b) => b.paid).reduce((s, b) => s + (b.cost ?? 0), 0)
+  // Committed spend only (real + kept plans), with per-person estimates scaled to
+  // party totals — same convention as the Costs page, so the figures agree.
+  const pax = Math.max(1, trip.adultCount + trip.childCount)
+  const committedBookings = trip.bookings.filter((b) => isCommittedStatus(b.status) && b.cost != null)
+  const totalBudget = committedBookings.reduce((sum, b) => sum + bookingPartyCost(b, pax), 0)
+  const paidSoFar = committedBookings.filter((b) => b.paid).reduce((s, b) => s + bookingPartyCost(b, pax), 0)
   const paidPct = totalBudget ? Math.round((paidSoFar / totalBudget) * 100) : 0
 
   // Member count for the Settings tile preview ("you + 2 others" style).

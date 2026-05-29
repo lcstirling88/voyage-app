@@ -19,7 +19,7 @@ export default async function TripsListPage() {
   })
 
   return (
-    <main className="min-h-screen px-6 sm:px-10 py-10 sm:py-16 max-w-5xl mx-auto">
+    <main className="min-h-screen px-6 sm:px-10 pt-[calc(env(safe-area-inset-top)+2.5rem)] pb-10 sm:pt-[calc(env(safe-area-inset-top)+4rem)] sm:pb-16 max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-4">
         <div>
           <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Itinera</div>

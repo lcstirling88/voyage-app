@@ -26,7 +26,7 @@ export default async function AtlasMapPage() {
       <Link
         href="/atlas"
         aria-label="Close full-screen map"
-        className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-paper-pure/90 backdrop-blur p-2 rounded-md border border-line shadow-soft hover:bg-paper-pure text-ink-muted hover:text-ink transition"
+        className="absolute top-[calc(env(safe-area-inset-top)+0.75rem)] right-3 sm:top-[calc(env(safe-area-inset-top)+1rem)] sm:right-4 bg-paper-pure/90 backdrop-blur p-2 rounded-md border border-line shadow-soft hover:bg-paper-pure text-ink-muted hover:text-ink transition"
       >
         <X className="w-5 h-5" />
       </Link>

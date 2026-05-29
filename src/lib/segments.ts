@@ -62,7 +62,17 @@ async function deriveSegmentsFromBookings(trip: TripLike): Promise<ResolvedSegme
 
   const placeOf = (h: (typeof hotels)[number]) => (h.location || h.address || h.title || '').trim()
   const distinct = [...new Set(hotels.map(placeOf).filter(Boolean))]
-  const geoEntries = await Promise.all(distinct.map(async (p) => [p, await geocodePlace(p)] as const))
+  // Bias ambiguous hotel place-names toward the trip's destination country so a
+  // "Queenstown" stay on a New Zealand trip isn't geocoded to South Africa. The
+  // hint only disambiguates same-named places; genuinely foreign cities (a
+  // distinct name) still fall through to the population-ranked match, so this
+  // stays safe for real multi-country trips.
+  const destProfile = profileForDestination(trip.destination)
+  const countryHint =
+    destProfile.label && destProfile.label !== 'Unknown' ? destProfile.label : trip.destination.trim()
+  const geoEntries = await Promise.all(
+    distinct.map(async (p) => [p, await geocodePlace(p, { countryHint })] as const),
+  )
   const geoByPlace = new Map(geoEntries)
 
   type Leg = { country: string; profile: ReturnType<typeof profileForDestination>; start: Date; end: Date }

@@ -2,9 +2,17 @@ import { notFound } from 'next/navigation'
 import { Check, Clock, AlertCircle, Zap } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { fmtDate, fmtMoney } from '@/lib/format'
-import { startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay } from 'date-fns'
+import { startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, differenceInDays } from 'date-fns'
 import { InlineDeleteButton } from '@/components/InlineDeleteButton'
 import { AddPaymentFormClient } from '@/components/AddPaymentFormClient'
+import { computePlanBudget, bookingPartyCost, isCommittedStatus } from '@/lib/budget'
+import { currencySymbol } from '@/lib/destinations'
+
+/** Compact money for the tiny calendar cells: "$4.5k" for big sums, "$450" otherwise. */
+function compactMoney(amount: number, currency: string): string {
+  const sym = currencySymbol(currency)
+  return amount >= 1000 ? `${sym}${(amount / 1000).toFixed(1)}k` : `${sym}${Math.round(amount)}`
+}
 
 export default async function CostsPage({ params }: { params: Promise<{ tripSlug: string }> }) {
   const { tripSlug } = await params
@@ -14,23 +22,35 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
   })
   if (!trip) notFound()
 
-  const totalBudget = trip.bookings.reduce((s, b) => s + (b.cost ?? 0), 0)
-  const paid = trip.bookings.filter((b) => b.paid).reduce((s, b) => s + (b.cost ?? 0), 0)
+  const pax = Math.max(1, trip.adultCount + trip.childCount)
+  // Committed = real bookings + kept plans. Unkept AI ideas are excluded, and
+  // per-person estimate rows are scaled to party totals so the headline figure
+  // isn't a mix of per-person and whole-party numbers.
+  const committedBookings = trip.bookings.filter((b) => isCommittedStatus(b.status) && b.cost != null)
+  const totalBudget = committedBookings.reduce((s, b) => s + bookingPartyCost(b, pax), 0)
+  const paid = committedBookings.filter((b) => b.paid).reduce((s, b) => s + bookingPartyCost(b, pax), 0)
   const upcoming = totalBudget - paid
   const paidPct = totalBudget ? (paid / totalBudget) * 100 : 0
-  const days = (trip.endDate.getTime() - trip.startDate.getTime()) / 86_400_000 || 1
+  const days = Math.max(1, differenceInDays(trip.endDate, trip.startDate) + 1)
   const perDay = totalBudget / days
-  const pax = (trip.travelerNames?.split(',').length ?? 1)
 
-  // Category breakdown
+  // Food estimate (daily allowance for days without a logged meal).
+  const planBudget = computePlanBudget(trip.bookings, {
+    homeCurrency: trip.homeCurrency,
+    partySize: pax,
+    tripStart: trip.startDate,
+    tripEnd: trip.endDate,
+  })
+
+  // Category breakdown (committed only, party totals)
   const byCat: Record<string, number> = {}
-  for (const b of trip.bookings) {
+  for (const b of committedBookings) {
     const key = b.type === 'hotel' ? 'Lodging'
       : b.type === 'flight' ? 'Flights'
       : b.type === 'restaurant' ? 'Food & dining'
       : b.type === 'activity' ? 'Activities'
       : 'Transit & misc'
-    byCat[key] = (byCat[key] ?? 0) + (b.cost ?? 0)
+    byCat[key] = (byCat[key] ?? 0) + bookingPartyCost(b, pax)
   }
   const catColors: Record<string, string> = {
     'Lodging': 'bg-sage',
@@ -92,10 +112,17 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
             </div>
           </div>
           <div className="border border-line rounded-xl bg-paper-pure p-6">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Daily food budget left</div>
-            <div className="font-display text-3xl sm:text-4xl md:text-5xl mt-2">$120 <span className="text-sm text-ink-muted">/ day</span></div>
-            <div className="text-xs text-ink-muted mt-2">excludes pre-booked meals</div>
-            <button className="mt-5 text-xs ulink text-sage font-medium">Log a meal expense →</button>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">Food estimate</div>
+            <div className="font-display text-3xl sm:text-4xl md:text-5xl mt-2">{fmtMoney(planBudget.foodPerPersonPerDay, trip.homeCurrency)} <span className="text-sm text-ink-muted">/ person / day</span></div>
+            <div className="text-xs text-ink-muted mt-2">
+              {planBudget.foodEstimateDays === 0
+                ? 'every day has a booked meal'
+                : `${planBudget.foodEstimateDays} ${planBudget.foodEstimateDays === 1 ? 'day' : 'days'} without a booked meal`}
+            </div>
+            <div className="mt-5 text-xs space-y-1">
+              <div className="flex justify-between"><span className="text-ink-muted">Est. food total</span><span className="num-mono">{fmtMoney(planBudget.food, trip.homeCurrency)}</span></div>
+              <div className="text-ink-muted/70 text-[11px]">Drops as you log real meals.</div>
+            </div>
           </div>
         </div>
 
@@ -155,7 +182,7 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
                     {d.getDate()}
                     {due && (
                       <span className={`absolute bottom-1 right-1 num-mono text-[9px] ${due.autoPay ? 'text-gold' : 'text-rust'}`}>
-                        ${Math.round(due.amount / 100) / 10}k
+                        {compactMoney(due.amount, due.currency)}
                       </span>
                     )}
                   </div>
@@ -199,17 +226,20 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {trip.bookings.filter((b) => b.cost != null).length === 0 && trip.payments.length === 0 && (
+              {committedBookings.length === 0 && trip.payments.length === 0 && (
                 <tr><td colSpan={5} className="px-6 py-12 text-center text-ink-muted text-sm italic">
                   No transactions yet. Forward booking emails to your trip inbox and they&apos;ll appear here.
                 </td></tr>
               )}
-              {trip.bookings.filter((b) => b.cost != null).sort((a, b) => (a.paidAt?.getTime() ?? a.startAt.getTime()) - (b.paidAt?.getTime() ?? b.startAt.getTime())).map((b) => (
+              {committedBookings.slice().sort((a, b) => (a.paidAt?.getTime() ?? a.startAt.getTime()) - (b.paidAt?.getTime() ?? b.startAt.getTime())).map((b) => (
                 <tr key={b.id} className="hover:bg-line-soft/40">
                   <td className="px-6 py-3 num-mono text-ink-muted">{b.paidAt ? fmtDate(b.paidAt) : 'TBC'}</td>
                   <td className="px-6 py-3">{b.title}</td>
                   <td className="px-6 py-3 text-ink-muted">{b.type}</td>
-                  <td className="px-6 py-3 text-right num-mono">{fmtMoney(b.cost!, b.currency ?? trip.homeCurrency)}</td>
+                  <td className="px-6 py-3 text-right num-mono">
+                    {b.status !== 'booked' && <span className="text-ink-muted/60 text-[10px] mr-1">est.</span>}
+                    {fmtMoney(bookingPartyCost(b, pax), b.status === 'booked' ? (b.currency ?? trip.homeCurrency) : trip.homeCurrency)}
+                  </td>
                   <td className="px-6 py-3 text-right pr-6">
                     <div className="inline-flex items-center gap-2">
                       {b.paid ? (

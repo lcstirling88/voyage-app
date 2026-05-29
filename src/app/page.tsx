@@ -28,7 +28,7 @@ export default function WelcomePage() {
 
   return (
     <main
-      className="relative min-h-screen md:grid md:grid-cols-[2fr_1fr]"
+      className="relative min-h-dvh md:grid md:grid-cols-[2fr_1fr]"
       style={{
         // Warm wash spans the whole page so the framed photo on the right
         // floats on the same surface as the content (no hard column seam).
@@ -39,7 +39,7 @@ export default function WelcomePage() {
       }}
     >
       {/* LEFT — brand poster over a warm wash + dotted route. */}
-      <div className="relative overflow-hidden flex flex-col min-h-[58vh] md:min-h-screen">
+      <div className="relative overflow-hidden flex flex-col min-h-[58dvh] md:min-h-dvh">
         {/* Decorative dotted flight-path — ochre→terracotta line, sage dots. */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
@@ -81,7 +81,7 @@ export default function WelcomePage() {
         </svg>
 
         {/* Top navigation — stacked section links. */}
-        <header className="relative z-10 px-5 sm:px-10 py-5 sm:py-6">
+        <header className="relative z-10 px-5 sm:px-10 pt-[calc(env(safe-area-inset-top)+1.25rem)] pb-5 sm:pt-[calc(env(safe-area-inset-top)+1.5rem)] sm:pb-6">
           <nav className="flex flex-col items-start gap-2.5 text-[11px] sm:text-xs uppercase tracking-[0.22em] text-ink-muted">
             <Link href="/profile" className="hover:text-ink transition inline-flex items-center gap-1.5">
               <UserIcon className="w-3 h-3" />

@@ -230,6 +230,14 @@ model Booking {
   paymentMethod      String?
   metadata           String?
 
+  // Lifecycle for the planning → booking bridge:
+  //   'idea'    — an AI suggestion, not yet accepted (renders as a dashed placeholder)
+  //   'planned' — the traveller kept it; they intend to do it
+  //   'to_book' — they've gone out to book it (followed a booking link)
+  //   'booked'  — confirmed / real (manual entry or a forwarded confirmation)
+  // Real bookings default to 'booked'; AI suggestions are written as 'idea'.
+  status             String    @default("booked")
+
   // Cancellation policy extracted from confirmation emails
   cancelByAt         DateTime?
   cancellationPolicy String?

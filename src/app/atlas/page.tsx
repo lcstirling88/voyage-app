@@ -45,7 +45,7 @@ export default async function AtlasPage() {
 
   return (
     <>
-      <div className="hero-light border-b border-line px-6 sm:px-10 py-6 sm:py-8">
+      <div className="hero-light border-b border-line px-6 sm:px-10 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-6 sm:pt-[calc(env(safe-area-inset-top)+2rem)] sm:pb-8">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted flex items-center gap-2">
           <Globe className="w-3 h-3" /> Atlas
         </div>

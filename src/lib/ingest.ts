@@ -68,6 +68,55 @@ function normalizeTitle(title: string): string {
     .trim()
 }
 
+// Filler words that carry no identity, so they shouldn't drive a fuzzy match.
+const TITLE_STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'our', 'his', 'her', 'their', 'your',
+  'tour', 'trip', 'visit', 'booking', 'reservation', 'tickets', 'ticket',
+  'pass', 'experience', 'entry', 'admission', 'session', 'class',
+])
+
+// Generic meal placeholders — a "Dinner" or "Lunch reservation" the traveller
+// jotted down should be absorbed by whatever real restaurant booking lands that
+// day, even though they share no distinctive words with the venue name.
+const GENERIC_DINING = new Set([
+  'dinner', 'lunch', 'breakfast', 'brunch', 'meal', 'meals', 'food',
+  'eat', 'dining', 'supper', 'drinks', 'restaurant', 'cafe', 'coffee',
+])
+
+/** Meaningful lowercase tokens of a title (stopwords + short words dropped). */
+function titleTokens(title: string): string[] {
+  return normalizeTitle(title)
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length > 2 && !TITLE_STOPWORDS.has(t))
+}
+
+/** Two tokens count as the same word if equal or sharing a long stem, so
+ *  "skydive"/"skydiving" and "kayak"/"kayaking" still match. */
+function tokenSimilar(a: string, b: string): boolean {
+  if (a === b) return true
+  if (a.length < 4 || b.length < 4) return false
+  if (a.startsWith(b) || b.startsWith(a)) return true
+  let i = 0
+  const max = Math.min(a.length, b.length)
+  while (i < max && a[i] === b[i]) i++
+  return i >= 5
+}
+
+/**
+ * Does a loose placeholder title plausibly describe the same thing as a real
+ * booking's title? Either they share a distinctive word, or the placeholder is
+ * a generic meal note matched against a real restaurant booking.
+ */
+function titlesLooselyMatch(placeholderTitle: string, realTitle: string, type: string): boolean {
+  const pTokens = titleTokens(placeholderTitle)
+  if (type === 'restaurant' && (pTokens.length === 0 || pTokens.every((t) => GENERIC_DINING.has(t)))) {
+    return true
+  }
+  const rTokens = titleTokens(realTitle)
+  return pTokens.some((pt) => rTokens.some((rt) => tokenSimilar(pt, rt)))
+}
+
 async function findDuplicateBooking(tripId: string, b: ParsedBooking): Promise<Booking | null> {
   // 0. Flight-specific: PNR + type + same calendar day is enough — no title
   //    check. Re-parsing a flight email (typical case: the body parse gave a
@@ -129,7 +178,7 @@ async function findDuplicateBooking(tripId: string, b: ParsedBooking): Promise<B
   //    confirmation code differs between a confirmation email and its later receipt
   //    but the activity itself is the same).
   const { startDay, endDay } = bookingDayBounds(b)
-  const m = await prisma.booking.findFirst({
+  const exact = await prisma.booking.findFirst({
     where: {
       tripId,
       type: b.type,
@@ -137,7 +186,30 @@ async function findDuplicateBooking(tripId: string, b: ParsedBooking): Promise<B
       startAt: { gte: startDay, lte: endDay },
     },
   })
-  return m
+  if (exact) return exact
+
+  // 4. Placeholder graduation: a real confirmation should quietly absorb a loose
+  //    placeholder the traveller (or the AI planner) jotted down earlier for the
+  //    same thing — "Skydiving" → "NZONE Skydive Queenstown", "Dinner" →
+  //    "Amisfield Bistro". Only UNBOOKED rows (ideas / planned / to_book) on the
+  //    same day are eligible, so two genuine confirmations never fuzzy-merge; the
+  //    matched placeholder is then graduated to 'booked' by persistParserResult.
+  //    Flights are excluded — their PNR/code rules above are already precise.
+  if (b.type !== 'flight') {
+    const placeholders = await prisma.booking.findMany({
+      where: {
+        tripId,
+        type: b.type,
+        status: { in: ['idea', 'planned', 'to_book'] },
+        startAt: { gte: startDay, lte: endDay },
+      },
+      orderBy: { startAt: 'asc' },
+    })
+    const fuzzy = placeholders.find((c) => titlesLooselyMatch(c.title, b.title, b.type))
+    if (fuzzy) return fuzzy
+  }
+
+  return null
 }
 
 /** Build a partial update record where empty values from the new parse don't clobber existing data. */
@@ -179,6 +251,11 @@ export async function persistParserResult(
       cancelByAt: b.cancelByAt ? parseLocalDateTime(b.cancelByAt) : null,
       cancellationPolicy: b.cancellationPolicy ?? null,
       metadata: b.metadata ? JSON.stringify(b.metadata) : null,
+      // A forwarded confirmation means this is real. New rows are 'booked', and
+      // when this matches something the traveller had only planned (or an AI idea
+      // they kept) — via findDuplicateBooking — that row graduates to 'booked'
+      // too, so the plan and its confirmation become one item on the timeline.
+      status: 'booked',
       sourceEmailId: incomingEmailId,
     }
     if (existing) {

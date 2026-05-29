@@ -15,7 +15,7 @@ export function LandingPhotoClient({ photo }: { photo: LandingPhoto }) {
   const [loaded, setLoaded] = useState(true)
 
   return (
-    <aside className="relative flex min-h-[44vh] md:min-h-screen p-5 sm:p-7 md:p-8">
+    <aside className="relative flex min-h-[44dvh] md:min-h-dvh p-5 sm:p-7 md:p-8">
       {/* Framed, softly-arched photo floating on the page wash — a window
           onto the place, rather than a full-bleed rectangle with hard edges. */}
       <div

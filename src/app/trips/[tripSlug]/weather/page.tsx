@@ -125,7 +125,9 @@ export default async function WeatherPage({ params }: { params: Promise<{ tripSl
   const legs = await Promise.all(segments.map(async (leg) => {
     const cityInLeg = trip.cities.find((c) => c.arriveOn <= leg.endDate && c.leaveOn >= leg.startDate)
     const lookupName = cityInLeg?.name?.trim() || leg.country
-    const geo = await geocodePlace(lookupName)
+    // Hint the leg's country so an ambiguous city (e.g. "Queenstown") resolves
+    // within this leg rather than to the most populous match worldwide.
+    const geo = await geocodePlace(lookupName, { countryHint: leg.country })
     const weather = geo
       ? await getTripWeather(geo.lat, geo.lon, leg.startDate.toISOString(), leg.endDate.toISOString())
       : null

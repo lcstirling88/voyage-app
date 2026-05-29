@@ -14,7 +14,10 @@ import { getAnthropic, PARSER_MODEL } from './anthropic'
 import { profileForDestination, profileForIsoNumeric } from './destinations'
 import { uploadAttachment } from './blob'
 import { getTripSegments } from './segments'
-import { cityForBooking } from './itinerary'
+import { cityForBooking, sessionForHour, SESSION_DEFAULT_HOUR, type Session } from './itinerary'
+import { allocate, mapRowsToSkeleton, cityForDate, tripNights, type RouteStop, type SkeletonStop } from './skeleton'
+import { generateRoute } from './trip-planner'
+import type { Booking } from '@prisma/client'
 
 // ----- Trip creation ----------------------------------------------------------------
 
@@ -146,16 +149,30 @@ export async function createTrip(formData: FormData): Promise<CreateTripResult> 
     })
 
     if (cityNames.length > 0) {
-      await tx.city.createMany({
-        data: cityNames.map((cityName, i) => ({
-          tripId: trip.id,
-          name: cityName,
-          country: destination,
-          arriveOn: startDate,
-          leaveOn: endDate,
-          displayOrder: i + 1,
-        })),
-      })
+      // Seed a real route skeleton from the typed cities: split the trip's
+      // nights roughly evenly across them (the last stop absorbs the remainder)
+      // so the new trip already has a sensible backbone the user can tweak on
+      // the planner's Route step. The previous code wrote every city spanning
+      // the full trip, which is no longer how the skeleton is read.
+      const total = tripNights(startDate, endDate)
+      const per = Math.max(1, Math.floor(total / cityNames.length))
+      const stops = allocate(
+        cityNames.map((c) => ({ city: c, country: destination, nights: per })),
+        startDate,
+        endDate,
+      )
+      if (stops.length > 0) {
+        await tx.city.createMany({
+          data: stops.map((s) => ({
+            tripId: trip.id,
+            name: s.city,
+            country: s.country,
+            arriveOn: s.arriveOn,
+            leaveOn: s.leaveOn,
+            displayOrder: s.order,
+          })),
+        })
+      }
     }
 
     await tx.checklistItem.createMany({
@@ -164,7 +181,9 @@ export async function createTrip(formData: FormData): Promise<CreateTripResult> 
   })
 
   revalidatePath('/trips')
-  redirect(`/trips/${slug}/inbox`)
+  // Land on the itinerary, where a brand-new (empty) trip is greeted with the
+  // two doors: "let Itinera plan it" vs "I've already booked — forward emails".
+  redirect(`/trips/${slug}/itinerary`)
 }
 
 // ----- AI Local Info generation -----------------------------------------------------
@@ -517,8 +536,8 @@ export async function suggestActivities(formData: FormData): Promise<SuggestResu
                   location: { type: 'string' as const, description: 'Address or neighborhood' },
                   durationMinutes: { type: 'number' as const },
                   notes: { type: 'string' as const, description: '1-2 sentences why this fits' },
-                  estimatedCost: { type: 'number' as const, description: 'Per person, in local currency' },
-                  estimatedCurrency: { type: 'string' as const, description: 'ISO 4217 e.g. NZD, AUD' },
+                  estimatedCost: { type: 'number' as const, description: `Per person, in the home currency ${trip.homeCurrency}` },
+                  estimatedCurrency: { type: 'string' as const, description: `ISO 4217 — use ${trip.homeCurrency}` },
                 },
                 required: ['title', 'time', 'type', 'notes'],
               },
@@ -558,6 +577,120 @@ type PlanItem = {
 }
 
 export type GenerateTripPlanResult = { ok: true; count: number } | { ok: false; error: string }
+export type SwapSuggestionResult = { ok: true } | { ok: false; error: string }
+export type RegenerateDayResult = { ok: true; count: number } | { ok: false; error: string }
+
+/**
+ * Preferences captured when the planner first ran. Stored on EACH suggestion's
+ * metadata (no schema change) so the iterative actions — swap one, reimagine a
+ * whole day — can stay true to what the traveller originally chose.
+ */
+type PlanPrefs = { interests: string[]; budgetTier: string; budgetAmount: string; pace: string }
+
+const SESSION_TIME: Record<string, string> = { morning: '09:30', afternoon: '14:00', night: '19:00' }
+
+function parseMeta(s: string | null | undefined): Record<string, unknown> {
+  if (!s) return {}
+  try { const o = JSON.parse(s); return o && typeof o === 'object' ? (o as Record<string, unknown>) : {} } catch { return {} }
+}
+function isSuggested(b: { status: string }): boolean {
+  return b.status === 'idea'
+}
+function readPrefsFromMeta(meta: Record<string, unknown>): PlanPrefs {
+  const p = (meta.prefs ?? {}) as Record<string, unknown>
+  return {
+    interests: Array.isArray(p.interests) ? (p.interests as unknown[]).map(String) : [],
+    budgetTier: typeof p.budgetTier === 'string' ? p.budgetTier : 'balanced',
+    budgetAmount: typeof p.budgetAmount === 'string' ? p.budgetAmount : '',
+    pace: typeof p.pace === 'string' ? p.pace : 'balanced',
+  }
+}
+
+/** Budget + pace guidance lines, shared by the planner and its iterative cousins. */
+function budgetPaceText(homeCurrency: string, prefs: PlanPrefs): { budgetText: string; paceText: string } {
+  const budgetText = prefs.budgetAmount
+    ? `Budget: roughly ${homeCurrency} ${prefs.budgetAmount} total for activities + dining across the trip — prioritise to fit.`
+    : `Budget level: ${prefs.budgetTier} — ${
+        prefs.budgetTier === 'budget' ? 'favour free / cheap experiences, street food, public transport'
+        : prefs.budgetTier === 'splurge' ? 'premium experiences and notable restaurants are welcome'
+        : 'sensible mid-range choices'
+      }.`
+  const paceText =
+    prefs.pace === 'relaxed' ? '1-2 things per day with downtime'
+    : prefs.pace === 'packed' ? '3-4 things per day, full days'
+    : '2-3 things per day, balanced'
+  return { budgetText, paceText }
+}
+
+/**
+ * Which city the traveller is based in on a given date: the route skeleton
+ * first (works before any booking), then the hotel covering that night, then
+ * the bare destination.
+ */
+function cityForPlanDate(
+  trip: { destination: string; endDate: Date },
+  skeleton: { scheduled: boolean; stops: SkeletonStop[] },
+  hotels: Array<Pick<Booking, 'location' | 'address' | 'startAt' | 'endAt'>>,
+  date: Date,
+): string {
+  if (skeleton.scheduled) {
+    const c = cityForDate(skeleton.stops, date, trip.endDate)
+    if (c) return c
+  }
+  const d = startOfDay(date)
+  for (const h of hotels) {
+    const start = startOfDay(h.startAt)
+    const end = h.endAt ? startOfDay(h.endAt) : start
+    if (+d === +start || (d >= start && d < end)) {
+      const c = cityForBooking(h)
+      if (c) return c
+    }
+  }
+  return trip.destination
+}
+
+/**
+ * Create suggested booking rows from plan items. Stores area + session + the
+ * capture-time prefs in metadata so each suggestion can be iterated on later.
+ */
+async function createSuggestionRows(
+  trip: { id: string; startDate: Date; endDate: Date; localCurrency: string | null; homeCurrency: string },
+  items: PlanItem[],
+  prefs: PlanPrefs,
+): Promise<number> {
+  const tripStart = startOfDay(trip.startDate)
+  const tripEnd = startOfDay(trip.endDate)
+  let count = 0
+  for (const it of items) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(it.date)) continue
+    const day = startOfDay(new Date(`${it.date}T00:00:00Z`))
+    if (day < tripStart || day > tripEnd) continue
+    const session = it.session === 'morning' || it.session === 'afternoon' || it.session === 'night' ? it.session : 'afternoon'
+    const time = SESSION_TIME[session] ?? '12:00'
+    const startAt = new Date(`${it.date}T${time}:00Z`)
+    if (isNaN(startAt.getTime())) continue
+    const type = it.type === 'restaurant' ? 'restaurant' : 'activity'
+    await prisma.booking.create({
+      data: {
+        tripId: trip.id,
+        type,
+        title: (it.title || 'Suggestion').slice(0, 200),
+        startAt,
+        status: 'idea',
+        location: it.location || it.area || null,
+        notes: it.note || null,
+        cost: typeof it.estimatedCost === 'number' ? it.estimatedCost : null,
+        // Estimates are captured PER PERSON in the home currency (see tool schema)
+        // so they sum cleanly against the trip budget — force it, don't trust the
+        // model's currency label, to keep every estimate in one unit.
+        currency: trip.homeCurrency,
+        metadata: JSON.stringify({ __suggested: true, area: it.area ?? null, session, prefs }),
+      },
+    })
+    count++
+  }
+  return count
+}
 
 /**
  * "Let Itinera plan it" — turn the traveller's ticked interests + budget + pace
@@ -585,20 +718,36 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
     orderBy: { startAt: 'asc' },
   })
 
-  // Accommodation timeline → which city each date is based in, so the model
-  // keeps a day's suggestions in one area.
+  // Where each date is based, so the model keeps a day's suggestions in one
+  // area. The trip's ROUTE SKELETON (City rows) is the source of truth when it
+  // exists — that's what makes planning work before any hotel is booked. We
+  // fall back to the accommodation timeline, then to the bare destination.
+  const cityRows = await prisma.city.findMany({ where: { tripId: trip.id } })
+  const skeleton = mapRowsToSkeleton(cityRows, trip.startDate, trip.endDate)
   const hotels = bookings.filter((b) => b.type === 'hotel')
-  const basedIn = hotels.length
-    ? hotels.map((h) => {
+
+  let basedIn: string
+  let tripCities: string[]
+  if (skeleton.scheduled) {
+    basedIn = skeleton.stops
+      .map((s) => `  ${format(s.arriveOn, 'yyyy-MM-dd')} -> ${format(s.leaveOn, 'yyyy-MM-dd')}: ${s.city}`)
+      .join('\n')
+    tripCities = [...new Set(skeleton.stops.map((s) => s.city))]
+  } else if (hotels.length) {
+    basedIn = hotels
+      .map((h) => {
         const city = cityForBooking(h) ?? h.location ?? trip.destination
         return `  ${format(h.startAt, 'yyyy-MM-dd')} -> ${format(h.endAt ?? h.startAt, 'yyyy-MM-dd')}: ${city}`
-      }).join('\n')
-    : `  (no accommodation booked yet — assume the whole trip is around ${trip.destination})`
+      })
+      .join('\n')
+    tripCities = [...new Set(hotels.map((h) => cityForBooking(h)).filter((c): c is string => !!c))]
+  } else {
+    basedIn = `  (no route or accommodation set yet — assume the whole trip is around ${trip.destination})`
+    tripCities = []
+  }
 
-  // The cities the trip actually visits (from where they sleep). Suggestions
-  // must stay within these — the model otherwise wanders to famous cities
-  // (e.g. adding Kyoto to a Tokyo + Hokkaido trip).
-  const tripCities = [...new Set(hotels.map((h) => cityForBooking(h)).filter((c): c is string => !!c))]
+  // Suggestions must stay within these cities — the model otherwise wanders to
+  // famous cities (e.g. adding Kyoto to a Tokyo + Hokkaido trip).
   const citiesLine = tripCities.length ? tripCities.join(', ') : trip.destination
 
   // What's already planned, so the model fills gaps rather than clashing.
@@ -607,17 +756,8 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
     ? existing.map((b) => `  ${format(b.startAt, 'yyyy-MM-dd')} ${format(b.startAt, 'HH:mm')} — ${b.title} (${b.type})`).join('\n')
     : '  (nothing yet)'
 
-  const budgetText = budgetAmount
-    ? `Budget: roughly ${trip.homeCurrency} ${budgetAmount} total for activities + dining across the trip — prioritise to fit.`
-    : `Budget level: ${budgetTier} — ${
-        budgetTier === 'budget' ? 'favour free / cheap experiences, street food, public transport'
-        : budgetTier === 'splurge' ? 'premium experiences and notable restaurants are welcome'
-        : 'sensible mid-range choices'
-      }.`
-  const paceText =
-    pace === 'relaxed' ? '1-2 things per day with downtime'
-    : pace === 'packed' ? '3-4 things per day, full days'
-    : '2-3 things per day, balanced'
+  const prefs: PlanPrefs = { interests, budgetTier, budgetAmount, pace }
+  const { budgetText, paceText } = budgetPaceText(trip.homeCurrency, prefs)
 
   const context =
     `Trip: ${trip.name}\n` +
@@ -625,7 +765,7 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
     `Cities on this trip — suggest ONLY places in these, never any other city: ${citiesLine}\n` +
     `Dates: ${format(trip.startDate, 'yyyy-MM-dd')} to ${format(trip.endDate, 'yyyy-MM-dd')}\n` +
     `Party: ${trip.adultCount} adult(s)${trip.childCount ? `, ${trip.childCount} child(ren)${trip.childrenAges ? ` aged ${trip.childrenAges}` : ''}` : ''}\n` +
-    `Local currency: ${trip.localCurrency ?? trip.homeCurrency}\n\n` +
+    `Local spending currency: ${trip.localCurrency ?? trip.homeCurrency}. ESTIMATE EVERY COST PER PERSON IN THE HOME CURRENCY ${trip.homeCurrency} so it sums against their budget.\n\n` +
     `Accommodation timeline (which city they're based in each night; for any day not covered, use the nearest listed city by date — never introduce a new city):\n${basedIn}\n\n` +
     `Already on the itinerary (don't duplicate; build around these):\n${existingByDay}\n\n` +
     `Interests they ticked:\n${interests.length ? interests.map((i) => `  - ${i}`).join('\n') : '  - (open — surprise them with the classics)'}\n\n` +
@@ -667,8 +807,8 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
                   title: { type: 'string' as const, description: 'specific named place / experience' },
                   area: { type: 'string' as const, description: 'neighbourhood / area used for grouping' },
                   location: { type: 'string' as const, description: 'address or area' },
-                  estimatedCost: { type: 'number' as const, description: 'per person, local currency' },
-                  estimatedCurrency: { type: 'string' as const, description: 'ISO 4217, e.g. JPY' },
+                  estimatedCost: { type: 'number' as const, description: `per person, in the traveller's HOME currency ${trip.homeCurrency} (so it sums against their budget)` },
+                  estimatedCurrency: { type: 'string' as const, description: `ISO 4217 — use ${trip.homeCurrency}` },
                   note: { type: 'string' as const, description: '1 sentence why it fits' },
                 },
                 required: ['date', 'session', 'type', 'title', 'area'],
@@ -690,37 +830,10 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
 
     // Clear previous suggestions so regenerating doesn't pile up duplicates.
     await prisma.booking.deleteMany({
-      where: { tripId: trip.id, metadata: { contains: '"__suggested":true' } },
+      where: { tripId: trip.id, status: 'idea' },
     })
 
-    const tripStart = startOfDay(trip.startDate)
-    const tripEnd = startOfDay(trip.endDate)
-    const SESSION_TIME: Record<string, string> = { morning: '09:30', afternoon: '14:00', night: '19:00' }
-
-    let count = 0
-    for (const it of items) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(it.date)) continue
-      const day = startOfDay(new Date(`${it.date}T00:00:00Z`))
-      if (day < tripStart || day > tripEnd) continue
-      const time = SESSION_TIME[it.session] ?? '12:00'
-      const startAt = new Date(`${it.date}T${time}:00Z`)
-      if (isNaN(startAt.getTime())) continue
-      const type = it.type === 'restaurant' ? 'restaurant' : 'activity'
-      await prisma.booking.create({
-        data: {
-          tripId: trip.id,
-          type,
-          title: (it.title || 'Suggestion').slice(0, 200),
-          startAt,
-          location: it.location || it.area || null,
-          notes: it.note || null,
-          cost: typeof it.estimatedCost === 'number' ? it.estimatedCost : null,
-          currency: it.estimatedCurrency || trip.localCurrency || null,
-          metadata: JSON.stringify({ __suggested: true, area: it.area ?? null }),
-        },
-      })
-      count++
-    }
+    const count = await createSuggestionRows(trip, items, prefs)
 
     revalidatePath(`/trips/${tripSlug}/itinerary`)
     revalidatePath(`/trips/${tripSlug}`, 'layout')
@@ -733,8 +846,9 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
 
 // ----- Suggestion management (from the AI planner) ---------------------------------
 
-/** Promote a suggested booking to a real one (strip the __suggested flag so it
- *  renders as a normal, "booked" item). */
+/** "Keep" an AI idea: promote it from a dashed suggestion to a PLANNED item the
+ *  traveller intends to do (status 'idea' → 'planned'). Also strips the legacy
+ *  __suggested metadata flag so nothing stale lingers. */
 export async function confirmSuggestion(formData: FormData): Promise<void> {
   const tripSlug = String(formData.get('tripSlug') ?? '')
   const id = String(formData.get('id') ?? '')
@@ -746,19 +860,375 @@ export async function confirmSuggestion(formData: FormData): Promise<void> {
   try { meta = booking.metadata ? JSON.parse(booking.metadata) : {} } catch { meta = {} }
   delete meta.__suggested
   const newMeta = Object.keys(meta).length ? JSON.stringify(meta) : null
-  await prisma.booking.update({ where: { id }, data: { metadata: newMeta } })
+  await prisma.booking.update({ where: { id }, data: { status: 'planned', metadata: newMeta } })
   revalidatePath(`/trips/${tripSlug}/itinerary`)
   revalidatePath(`/trips/${tripSlug}`, 'layout')
 }
 
-/** Remove every AI suggestion from a trip in one go. */
+/** Remove every AI suggestion (status 'idea') from a trip in one go. */
 export async function clearTripSuggestions(formData: FormData): Promise<void> {
   const tripSlug = String(formData.get('tripSlug') ?? '')
   if (!tripSlug) return
   const { trip } = await requireTripAccess(tripSlug)
   await prisma.booking.deleteMany({
-    where: { tripId: trip.id, metadata: { contains: '"__suggested":true' } },
+    where: { tripId: trip.id, status: 'idea' },
   })
+  revalidatePath(`/trips/${tripSlug}/itinerary`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+}
+
+/**
+ * Move an item along the planning → booking lifecycle. Used by the "Book it"
+ * (→ to_book) and "Mark booked" (→ booked) controls. Validated against the
+ * known statuses so a bad value can't slip in.
+ */
+const BOOKING_STATUSES = new Set(['idea', 'planned', 'to_book', 'booked'])
+export async function setBookingStatus(formData: FormData): Promise<void> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  const id = String(formData.get('id') ?? '')
+  const status = String(formData.get('status') ?? '')
+  if (!tripSlug || !id || !BOOKING_STATUSES.has(status)) return
+  const { trip } = await requireTripAccess(tripSlug)
+  const booking = await prisma.booking.findFirst({ where: { id, tripId: trip.id } })
+  if (!booking) return
+  await prisma.booking.update({ where: { id }, data: { status } })
+  revalidatePath(`/trips/${tripSlug}/itinerary`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+}
+
+/**
+ * Swap a single suggestion for a fresh alternative — same day, same session,
+ * same type, same city — honouring the preferences captured when the plan was
+ * first generated (stored on the suggestion's metadata). Updates the row in
+ * place so its spot on the itinerary holds.
+ */
+export async function swapSuggestion(formData: FormData): Promise<SwapSuggestionResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  const id = String(formData.get('id') ?? '')
+  if (!tripSlug || !id) return { ok: false, error: 'Missing trip or suggestion.' }
+
+  const anthropic = getAnthropic()
+  if (!anthropic) return { ok: false, error: 'AI not configured.' }
+
+  const { trip } = await requireTripAccess(tripSlug)
+  const target = await prisma.booking.findFirst({ where: { id, tripId: trip.id } })
+  if (!target) return { ok: false, error: 'Suggestion not found.' }
+  if (!isSuggested(target)) return { ok: false, error: 'That item is not a suggestion.' }
+
+  const meta = parseMeta(target.metadata)
+  const prefs = readPrefsFromMeta(meta)
+  const session: Session =
+    meta.session === 'morning' || meta.session === 'afternoon' || meta.session === 'night'
+      ? (meta.session as Session)
+      : sessionForHour(target.startAt.getUTCHours())
+  const type: 'activity' | 'restaurant' = target.type === 'restaurant' ? 'restaurant' : 'activity'
+  const dateStr = target.startAt.toISOString().slice(0, 10)
+
+  // Which city this day is based in (skeleton → hotel → bare destination).
+  const cityRows = await prisma.city.findMany({ where: { tripId: trip.id } })
+  const skeleton = mapRowsToSkeleton(cityRows, trip.startDate, trip.endDate)
+  const allBookings = await prisma.booking.findMany({ where: { tripId: trip.id } })
+  const hotels = allBookings.filter((b) => b.type === 'hotel')
+  const city = cityForPlanDate(trip, skeleton, hotels, target.startAt)
+
+  // Don't repeat anything already on the itinerary — including the item we're
+  // replacing, so the alternative is genuinely different.
+  const avoid = [...new Set(allBookings.filter((b) => b.type !== 'hotel').map((b) => b.title))]
+  const { budgetText } = budgetPaceText(trip.homeCurrency, prefs)
+
+  const context =
+    `Trip: ${trip.name} — ${trip.destination}\n` +
+    `Propose ONE ${type} in ${city} for ${dateStr} (${session}).\n` +
+    `Estimate the cost PER PERSON in the home currency ${trip.homeCurrency} (their local spending currency is ${trip.localCurrency ?? trip.homeCurrency}).\n` +
+    `Interests: ${prefs.interests.length ? prefs.interests.join(', ') : '(open)'}\n` +
+    `${budgetText}\n` +
+    `It MUST be a real, specific, named place in ${city}.\n` +
+    `Do NOT propose any of these (already on the itinerary):\n${avoid.length ? avoid.map((t) => `  - ${t}`).join('\n') : '  (none)'}`
+
+  try {
+    const response = await anthropic.messages.create({
+      model: PARSER_MODEL,
+      max_tokens: 1024,
+      system:
+        `You are a local travel concierge proposing a single replacement ${type}. It must be in ` +
+        `${city}, a real named place, fit the interests and budget, and must NOT duplicate anything ` +
+        `in the avoid list. One short sentence for the note.`,
+      tools: [{
+        name: 'suggest_one',
+        description: `A single replacement ${type}.`,
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            title: { type: 'string' as const, description: 'specific named place / experience' },
+            area: { type: 'string' as const, description: 'neighbourhood / area' },
+            location: { type: 'string' as const, description: 'address or area' },
+            estimatedCost: { type: 'number' as const, description: 'per person, local currency' },
+            estimatedCurrency: { type: 'string' as const, description: 'ISO 4217, e.g. JPY' },
+            note: { type: 'string' as const, description: '1 sentence why it fits' },
+          },
+          required: ['title', 'area'],
+        },
+      }],
+      tool_choice: { type: 'tool', name: 'suggest_one' },
+      messages: [{ role: 'user', content: context }],
+    })
+
+    const toolUse = response.content.find((c) => c.type === 'tool_use')
+    if (!toolUse || toolUse.type !== 'tool_use') return { ok: false, error: 'Itinera could not find an alternative.' }
+    const pick = toolUse.input as {
+      title?: string; area?: string; location?: string
+      estimatedCost?: number; estimatedCurrency?: string; note?: string
+    }
+    if (!pick.title) return { ok: false, error: 'Itinera could not find an alternative.' }
+
+    await prisma.booking.update({
+      where: { id },
+      data: {
+        title: pick.title.slice(0, 200),
+        status: 'idea',
+        location: pick.location || pick.area || null,
+        notes: pick.note || null,
+        cost: typeof pick.estimatedCost === 'number' ? pick.estimatedCost : null,
+        currency: trip.homeCurrency, // per-person estimate in home currency (matches budget)
+        metadata: JSON.stringify({ __suggested: true, area: pick.area ?? null, session, prefs }),
+      },
+    })
+
+    revalidatePath(`/trips/${tripSlug}/itinerary`)
+    revalidatePath(`/trips/${tripSlug}`, 'layout')
+    return { ok: true }
+  } catch (err) {
+    console.error('[swapSuggestion] error:', err)
+    return { ok: false, error: 'AI request failed. Try again in a moment.' }
+  }
+}
+
+/**
+ * Re-imagine a whole day's suggestions. Anything real on that day (already
+ * booked / confirmed) stays fixed and is built around; only the day's AI
+ * suggestions are replaced, in the same city, honouring the captured prefs.
+ * The old suggestions are deleted only AFTER a successful AI response, so a
+ * failed call leaves the existing day intact.
+ */
+export async function regenerateDay(formData: FormData): Promise<RegenerateDayResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  const dateStr = String(formData.get('date') ?? '')
+  if (!tripSlug || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return { ok: false, error: 'Missing trip or date.' }
+
+  const anthropic = getAnthropic()
+  if (!anthropic) return { ok: false, error: 'AI not configured.' }
+
+  const { trip } = await requireTripAccess(tripSlug)
+
+  const tripStart = startOfDay(trip.startDate)
+  const tripEnd = startOfDay(trip.endDate)
+  const day = startOfDay(new Date(`${dateStr}T00:00:00Z`))
+  if (day < tripStart || day > tripEnd) return { ok: false, error: 'That date is outside the trip.' }
+
+  const cityRows = await prisma.city.findMany({ where: { tripId: trip.id } })
+  const skeleton = mapRowsToSkeleton(cityRows, trip.startDate, trip.endDate)
+  const allBookings = await prisma.booking.findMany({ where: { tripId: trip.id }, orderBy: { startAt: 'asc' } })
+  const hotels = allBookings.filter((b) => b.type === 'hotel')
+  const city = cityForPlanDate(trip, skeleton, hotels, day)
+
+  const onThisDay = allBookings.filter(
+    (b) => b.type !== 'hotel' && b.startAt.toISOString().slice(0, 10) === dateStr,
+  )
+  const daySuggestionIds = new Set(onThisDay.filter((b) => isSuggested(b)).map((b) => b.id))
+  const fixed = onThisDay.filter((b) => !isSuggested(b)) // real plans — keep & build around
+
+  // Prefs: a suggestion on this day, else any suggestion on the trip, else defaults.
+  const prefsSource = onThisDay.find((b) => isSuggested(b)) ?? allBookings.find((b) => isSuggested(b))
+  const prefs = readPrefsFromMeta(prefsSource ? parseMeta(prefsSource.metadata) : {})
+  const { budgetText, paceText } = budgetPaceText(trip.homeCurrency, prefs)
+
+  // Avoid everything else on the trip (including other days), EXCEPT this day's
+  // own suggestions — those are exactly what we're replacing.
+  const avoid = [
+    ...new Set(
+      allBookings.filter((b) => b.type !== 'hotel' && !daySuggestionIds.has(b.id)).map((b) => b.title),
+    ),
+  ]
+  const fixedText = fixed.length
+    ? fixed.map((b) => `  ${format(b.startAt, 'HH:mm')} — ${b.title} (${b.type})`).join('\n')
+    : '  (nothing fixed — the whole day is open)'
+
+  const context =
+    `Trip: ${trip.name} — ${trip.destination}\n` +
+    `Plan ${dateStr}: a day based in ${city}. Aim for ${paceText}.\n` +
+    `Estimate the cost PER PERSON in the home currency ${trip.homeCurrency} (their local spending currency is ${trip.localCurrency ?? trip.homeCurrency}).\n` +
+    `Interests: ${prefs.interests.length ? prefs.interests.join(', ') : '(open — classics welcome)'}\n` +
+    `${budgetText}\n` +
+    `Everything must be real, specific, named places in ${city}, grouped so the day flows.\n` +
+    `Already fixed this day (build around these, don't clash):\n${fixedText}\n` +
+    `Do NOT repeat any of these (already elsewhere on the trip):\n${avoid.length ? avoid.map((t) => `  - ${t}`).join('\n') : '  (none)'}`
+
+  try {
+    const response = await anthropic.messages.create({
+      model: PARSER_MODEL,
+      max_tokens: 2048,
+      system:
+        `You are a local travel concierge planning ONE day in ${city}. Every place must be real, ` +
+        `named, and in ${city}. Cluster places by area so the day flows with little back-and-forth. ` +
+        `Honour the interests, budget and pace. Put restaurants at meal sessions (lunch = afternoon, ` +
+        `dinner = night). Don't duplicate the fixed items or anything in the avoid list. One short ` +
+        `sentence per note.`,
+      tools: [{
+        name: 'save_day',
+        description: 'A fresh set of suggested activities and restaurants for one day.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            items: {
+              type: 'array' as const,
+              items: {
+                type: 'object' as const,
+                properties: {
+                  session: { type: 'string' as const, enum: ['morning', 'afternoon', 'night'] },
+                  type: { type: 'string' as const, enum: ['activity', 'restaurant'] },
+                  title: { type: 'string' as const, description: 'specific named place / experience' },
+                  area: { type: 'string' as const, description: 'neighbourhood / area used for grouping' },
+                  location: { type: 'string' as const, description: 'address or area' },
+                  estimatedCost: { type: 'number' as const, description: `per person, in the traveller's HOME currency ${trip.homeCurrency} (so it sums against their budget)` },
+                  estimatedCurrency: { type: 'string' as const, description: `ISO 4217 — use ${trip.homeCurrency}` },
+                  note: { type: 'string' as const, description: '1 sentence why it fits' },
+                },
+                required: ['session', 'type', 'title', 'area'],
+              },
+            },
+          },
+          required: ['items'],
+        },
+      }],
+      tool_choice: { type: 'tool', name: 'save_day' },
+      messages: [{ role: 'user', content: context }],
+    })
+
+    const toolUse = response.content.find((c) => c.type === 'tool_use')
+    if (!toolUse || toolUse.type !== 'tool_use') return { ok: false, error: 'Itinera could not reimagine the day.' }
+    const rawItems = (toolUse.input as { items?: Array<Omit<PlanItem, 'date'>> }).items ?? []
+    const items: PlanItem[] = rawItems.map((it) => ({ ...it, date: dateStr }))
+
+    // Success — now (and only now) clear this day's old suggestions, then write the new set.
+    if (daySuggestionIds.size) {
+      await prisma.booking.deleteMany({ where: { id: { in: [...daySuggestionIds] } } })
+    }
+    const count = await createSuggestionRows(trip, items, prefs)
+
+    revalidatePath(`/trips/${tripSlug}/itinerary`)
+    revalidatePath(`/trips/${tripSlug}`, 'layout')
+    return { ok: true, count }
+  } catch (err) {
+    console.error('[regenerateDay] error:', err)
+    return { ok: false, error: 'AI request failed. Try again in a moment.' }
+  }
+}
+
+// ----- Trip route / skeleton (the planning backbone) --------------------------------
+
+export type RouteStopDTO = { city: string; country: string; nights: number; note: string | null }
+export type RouteResult = { ok: true; stops: RouteStopDTO[] } | { ok: false; error: string }
+
+/** Place desired stops on the calendar and replace the trip's City rows. */
+async function writeSkeleton(tripId: string, stops: RouteStop[], start: Date, end: Date) {
+  const placed = allocate(stops, start, end)
+  await prisma.city.deleteMany({ where: { tripId } })
+  if (placed.length > 0) {
+    await prisma.city.createMany({
+      data: placed.map((s) => ({
+        tripId,
+        name: s.city,
+        country: s.country,
+        arriveOn: s.arriveOn,
+        leaveOn: s.leaveOn,
+        displayOrder: s.order,
+      })),
+    })
+  }
+  return placed
+}
+
+function toDTO(stops: { city: string; country: string; nights: number; note: string | null }[]): RouteStopDTO[] {
+  return stops.map((s) => ({ city: s.city, country: s.country, nights: s.nights, note: s.note }))
+}
+
+/** AI-propose a multi-city route (cities + nights) and save it as the skeleton. */
+export async function generateTripSkeleton(formData: FormData): Promise<RouteResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!tripSlug) return { ok: false, error: 'Missing trip.' }
+  const anthropic = getAnthropic()
+  if (!anthropic) return { ok: false, error: 'AI not configured. Add ANTHROPIC_API_KEY.' }
+  const { trip } = await requireTripAccess(tripSlug)
+
+  const mustInclude = String(formData.get('mustInclude') ?? '')
+    .split(/[,\n]/).map((s) => s.trim()).filter(Boolean)
+  const notes = String(formData.get('notes') ?? '').trim()
+
+  const segments = await getTripSegments(trip)
+  const countries = [...new Set(segments.map((s) => s.country))]
+
+  const proposed = await generateRoute({
+    destination: trip.destination,
+    countries,
+    totalNights: tripNights(trip.startDate, trip.endDate),
+    adultCount: trip.adultCount,
+    childCount: trip.childCount,
+    childrenAges: trip.childrenAges,
+    mustInclude,
+    notes,
+  })
+  if (proposed.length === 0) return { ok: false, error: 'Itinera could not draft a route. Try again.' }
+
+  const placed = await writeSkeleton(trip.id, proposed, trip.startDate, trip.endDate)
+  revalidatePath(`/trips/${tripSlug}/itinerary`)
+  revalidatePath(`/trips/${tripSlug}/plan`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+  return { ok: true, stops: toDTO(placed) }
+}
+
+/** Persist a route the traveller edited by hand (city / nights / order). */
+export async function saveTripSkeleton(formData: FormData): Promise<RouteResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!tripSlug) return { ok: false, error: 'Missing trip.' }
+  const { trip } = await requireTripAccess(tripSlug)
+
+  let raw: unknown
+  try { raw = JSON.parse(String(formData.get('stops') ?? '[]')) } catch { return { ok: false, error: 'Bad route data.' } }
+  if (!Array.isArray(raw)) return { ok: false, error: 'Bad route data.' }
+
+  const stops: RouteStop[] = raw
+    .map((r) => {
+      const o = (r ?? {}) as Record<string, unknown>
+      return {
+        city: String(o.city ?? '').trim(),
+        country: String(o.country ?? trip.destination).trim(),
+        nights: Math.max(1, Math.round(Number(o.nights) || 1)),
+        note: o.note ? String(o.note) : null,
+      }
+    })
+    .filter((s) => s.city)
+
+  if (stops.length === 0) {
+    // Clearing the route entirely.
+    await prisma.city.deleteMany({ where: { tripId: trip.id } })
+    revalidatePath(`/trips/${tripSlug}/itinerary`)
+    revalidatePath(`/trips/${tripSlug}`, 'layout')
+    return { ok: true, stops: [] }
+  }
+
+  const placed = await writeSkeleton(trip.id, stops, trip.startDate, trip.endDate)
+  revalidatePath(`/trips/${tripSlug}/itinerary`)
+  revalidatePath(`/trips/${tripSlug}/plan`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+  return { ok: true, stops: toDTO(placed) }
+}
+
+/** Wipe the trip's route skeleton (City rows). */
+export async function clearTripSkeleton(formData: FormData): Promise<void> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!tripSlug) return
+  const { trip } = await requireTripAccess(tripSlug)
+  await prisma.city.deleteMany({ where: { tripId: trip.id } })
   revalidatePath(`/trips/${tripSlug}/itinerary`)
   revalidatePath(`/trips/${tripSlug}`, 'layout')
 }
@@ -805,6 +1275,111 @@ export async function addBookingManually(formData: FormData): Promise<AddBooking
       location,
       notes,
     },
+  })
+
+  revalidatePath(`/trips/${tripSlug}/itinerary`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+  return { ok: true }
+}
+
+// ----- Quick add: inline plan or loose note -----------------------------------------
+
+export type QuickAddResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * The inline per-session "+ Add a plan or note" affordance on the itinerary.
+ * A *plan* is a lightweight activity (status 'planned', no cost yet); a *note*
+ * is a non-booking jotting (type 'note') that carries no cost and shows no
+ * book-it lifecycle. Both are pinned to the chosen session's default hour and
+ * nudged a minute later than whatever is already in that session, so repeated
+ * adds stack in the order they were typed.
+ */
+export async function quickAddItem(formData: FormData): Promise<QuickAddResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!tripSlug) return { ok: false, error: 'Missing trip.' }
+  const { trip } = await requireTripAccess(tripSlug)
+
+  const title = String(formData.get('title') ?? '').trim()
+  const dateStr = String(formData.get('date') ?? '')                 // YYYY-MM-DD
+  const sessionRaw = String(formData.get('session') ?? 'morning')
+  const session: Session =
+    sessionRaw === 'afternoon' || sessionRaw === 'night' ? sessionRaw : 'morning'
+  const isNote = String(formData.get('kind') ?? 'plan') === 'note'
+
+  if (!title) return { ok: false, error: 'Type something first.' }
+  if (!dateStr) return { ok: false, error: 'Missing date.' }
+
+  // Place it at the end of the session: default hour + a minute per item already
+  // bucketed there today (capped at :59 so it can't spill into the next session).
+  const dayStart = new Date(`${dateStr}T00:00:00Z`)
+  const dayEnd = new Date(`${dateStr}T23:59:59Z`)
+  if (isNaN(dayStart.getTime())) return { ok: false, error: 'Invalid date.' }
+  const sameDay = await prisma.booking.findMany({
+    where: { tripId: trip.id, startAt: { gte: dayStart, lte: dayEnd } },
+    select: { startAt: true },
+  })
+  const alreadyInSession = sameDay.filter(
+    (b) => sessionForHour(b.startAt.getUTCHours()) === session,
+  ).length
+  const hour = SESSION_DEFAULT_HOUR[session]
+  const minute = Math.min(alreadyInSession, 59)
+  const startAt = new Date(
+    `${dateStr}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00Z`,
+  )
+
+  await prisma.booking.create({
+    data: {
+      tripId: trip.id,
+      type: isNote ? 'note' : 'activity',
+      title,
+      startAt,
+      status: 'planned',
+    },
+  })
+
+  revalidatePath(`/trips/${tripSlug}/itinerary`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+  return { ok: true }
+}
+
+// ----- Retime: reorder / move an item within its day --------------------------------
+
+export type RetimeResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Reorder/retime a single itinerary item without leaving the day view. Changing
+ * the time both reorders within a session (items sort by time) and moves between
+ * sessions (a time in another session's range). The calendar day is preserved —
+ * only the time-of-day changes — and any end time shifts by the same delta so a
+ * multi-hour activity keeps its duration.
+ */
+export async function retimeBooking(formData: FormData): Promise<RetimeResult> {
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  const id = String(formData.get('id') ?? '')
+  const time = String(formData.get('time') ?? '').trim()            // HH:mm
+  if (!tripSlug || !id) return { ok: false, error: 'Missing fields.' }
+  const m = time.match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return { ok: false, error: 'Invalid time.' }
+
+  const { trip } = await requireTripAccess(tripSlug)
+  const booking = await prisma.booking.findFirst({ where: { id, tripId: trip.id } })
+  if (!booking) return { ok: false, error: 'Item not found.' }
+
+  const hh = Math.min(23, parseInt(m[1], 10))
+  const mm = Math.min(59, parseInt(m[2], 10))
+  // Times are stored as UTC wall-clock, so set the time-of-day in UTC and keep
+  // the same calendar day.
+  const newStart = new Date(booking.startAt)
+  newStart.setUTCHours(hh, mm, 0, 0)
+  let newEnd: Date | null = booking.endAt
+  if (booking.endAt) {
+    const delta = newStart.getTime() - booking.startAt.getTime()
+    newEnd = new Date(booking.endAt.getTime() + delta)
+  }
+
+  await prisma.booking.update({
+    where: { id: booking.id },
+    data: { startAt: newStart, endAt: newEnd },
   })
 
   revalidatePath(`/trips/${tripSlug}/itinerary`)
@@ -884,8 +1459,13 @@ export async function addChecklistItem(formData: FormData): Promise<AddChecklist
 export async function toggleChecklistItem(formData: FormData) {
   const id = String(formData.get('id') ?? '')
   if (!id) return
-  const item = await prisma.checklistItem.findUnique({ where: { id } })
+  const item = await prisma.checklistItem.findUnique({
+    where: { id },
+    include: { trip: { select: { slug: true } } },
+  })
   if (!item) return
+  // Gate on trip membership — without this anyone could toggle any item by id.
+  await requireTripAccess(item.trip.slug)
   await prisma.checklistItem.update({
     where: { id },
     data: { done: !item.done, doneAt: !item.done ? new Date() : null },
@@ -897,8 +1477,9 @@ export async function toggleChecklistItem(formData: FormData) {
 
 export async function ingestPastedEmail(formData: FormData) {
   const tripSlug = String(formData.get('tripSlug') ?? '')
-  const trip = await prisma.trip.findUnique({ where: { slug: tripSlug } })
-  if (!trip) return { error: 'Trip not found' }
+  // Gate on trip membership — this creates emails/bookings, so it must not be
+  // callable for a trip the user can't access. Redirects away if unauthorized.
+  const { trip } = await requireTripAccess(tripSlug)
 
   const from = String(formData.get('from') ?? 'unknown@unknown')
   const subject = String(formData.get('subject') ?? '(no subject)')
@@ -1447,7 +2028,10 @@ export async function deleteBooking(formData: FormData) {
   const tripSlug = String(formData.get('tripSlug') ?? '')
   if (!id || !tripSlug) return
   await requireTripAccess(tripSlug)
-  await prisma.booking.delete({ where: { id } })
+  // Scope by trip too: access is checked on the submitted slug, so the delete
+  // must be constrained to that trip or a member could delete another trip's
+  // booking by id. deleteMany no-ops instead of throwing on a mismatch.
+  await prisma.booking.deleteMany({ where: { id, trip: { slug: tripSlug } } })
   revalidatePath(`/trips/${tripSlug}`, 'layout')
 }
 
@@ -1456,7 +2040,7 @@ export async function deleteDocument(formData: FormData) {
   const tripSlug = String(formData.get('tripSlug') ?? '')
   if (!id || !tripSlug) return
   await requireTripAccess(tripSlug)
-  await prisma.document.delete({ where: { id } })
+  await prisma.document.deleteMany({ where: { id, trip: { slug: tripSlug } } })
   revalidatePath(`/trips/${tripSlug}`, 'layout')
 }
 
@@ -1465,7 +2049,7 @@ export async function deletePayment(formData: FormData) {
   const tripSlug = String(formData.get('tripSlug') ?? '')
   if (!id || !tripSlug) return
   await requireTripAccess(tripSlug)
-  await prisma.payment.delete({ where: { id } })
+  await prisma.payment.deleteMany({ where: { id, trip: { slug: tripSlug } } })
   revalidatePath(`/trips/${tripSlug}`, 'layout')
 }
 

@@ -63,7 +63,7 @@ export default async function ProfilePage() {
 
   return (
     <main className="min-h-screen bg-paper-pure">
-      <header className="border-b border-line px-5 sm:px-10 py-4 flex items-center justify-between">
+      <header className="border-b border-line px-5 sm:px-10 pt-[calc(env(safe-area-inset-top)+1rem)] pb-4 flex items-center justify-between">
         <Link href="/" className="text-xs text-ink-muted hover:text-ink ulink inline-flex items-center gap-1.5">
           <ChevronLeft className="w-3.5 h-3.5" /> Home
         </Link>

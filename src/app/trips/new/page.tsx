@@ -6,7 +6,7 @@ export default function NewTripPage() {
   return (
     <main className="min-h-screen">
       <div className="hero-light border-b border-line">
-        <div className="px-6 sm:px-10 py-8 sm:py-10 max-w-3xl">
+        <div className="px-6 sm:px-10 pt-[calc(env(safe-area-inset-top)+2rem)] pb-8 sm:pt-[calc(env(safe-area-inset-top)+2.5rem)] sm:pb-10 max-w-3xl">
           <Link href="/trips" className="text-xs text-ink-muted inline-flex items-center gap-1 ulink mb-6">
             <ChevronLeft className="w-3 h-3" /> Back to trips
           </Link>

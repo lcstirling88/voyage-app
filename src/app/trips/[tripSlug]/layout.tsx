@@ -22,7 +22,7 @@ export default async function TripLayout({
   const { trip } = await requireTripAccess(tripSlug)
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-dvh">
       <TopBar trip={trip} />
       {children}
     </main>
