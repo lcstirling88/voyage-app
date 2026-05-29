@@ -8,8 +8,8 @@
  */
 
 import Link from 'next/link'
-import { ArrowRight, Mail } from 'lucide-react'
-import { auth, signIn } from '@/lib/auth'
+import { ArrowRight, User as UserIcon, Compass } from 'lucide-react'
+import { auth } from '@/lib/auth'
 import { ItineraBrand } from '@/components/ItineraBrand'
 
 const ROUTE_BLUE = '#0B6FB8'   // Spanish Blue — decorative route line
@@ -43,11 +43,18 @@ export default async function WelcomePage() {
         <circle cx="1140" cy="220" r="5" fill={ROUTE_CORAL} opacity="0.4" />
       </svg>
 
-      {/* Minimal header — just a sign-in link for returning travellers. */}
-      <header className="relative z-10 flex items-center justify-end px-5 sm:px-10 py-5 sm:py-6">
-        <Link href="/signin" className="text-[11px] sm:text-xs uppercase tracking-[0.22em] text-ink-muted hover:text-ink transition">
-          Sign in
-        </Link>
+      {/* Top navigation — just the two section links. */}
+      <header className="relative z-10 flex items-center px-5 sm:px-10 py-5 sm:py-6">
+        <nav className="flex items-center gap-4 sm:gap-6 text-[11px] sm:text-xs uppercase tracking-[0.22em] text-ink-muted">
+          <Link href="/profile" className="hover:text-ink transition inline-flex items-center gap-1.5">
+            <UserIcon className="w-3 h-3" />
+            <span>My profile</span>
+          </Link>
+          <Link href="/inspiration" className="hover:text-ink transition inline-flex items-center gap-1.5">
+            <Compass className="w-3 h-3" />
+            <span>Travel inspiration</span>
+          </Link>
+        </nav>
       </header>
 
       {/* Hero — centred mark + tagline */}
@@ -69,41 +76,20 @@ export default async function WelcomePage() {
           and keeps every passport stamp on a quiet, beautiful atlas of your travels.
         </p>
 
-        {/* Sign-up space — passwordless: enter an email, get a magic link.
-            The same flow signs returning users back in. */}
-        <form
-          action={async (formData) => {
-            'use server'
-            await signIn('resend', { email: formData.get('email'), redirectTo: '/' })
-          }}
-          className="mt-9 sm:mt-12 w-full max-w-md flex flex-col sm:flex-row items-stretch gap-2.5"
-        >
-          <input
-            type="email"
-            name="email"
-            required
-            autoComplete="email"
-            placeholder="you@example.com"
-            className="input flex-1 text-center sm:text-left"
-          />
-          <button type="submit" className="btn-ink justify-center whitespace-nowrap">
-            <Mail className="w-4 h-4" /> Sign up
-          </button>
-        </form>
-        <p className="mt-3 text-xs text-ink-muted">
-          No password — we email you a magic link to begin.
-        </p>
-
-        <div className="mt-5 text-sm">
-          {isAuthed ? (
-            <Link href="/trips" className="text-ink-muted hover:text-ink ulink transition inline-flex items-center gap-1">
-              Continue to your trips <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          ) : (
-            <Link href="/inspiration" className="text-ink-muted hover:text-ink ulink transition">
-              Browse inspiration first
-            </Link>
-          )}
+        <div className="mt-9 sm:mt-12 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
+          <Link
+            href={isAuthed ? '/trips' : '/signin'}
+            className="inline-flex items-center justify-center gap-2 text-sm font-medium px-6 py-3 rounded-md bg-sage text-paper-pure hover:opacity-90 transition shadow-soft"
+          >
+            {isAuthed ? 'Continue to your trips' : 'Begin your atlas'}
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+          <Link
+            href="/inspiration"
+            className="text-sm text-ink-muted hover:text-ink ulink transition"
+          >
+            Browse inspiration first
+          </Link>
         </div>
       </section>
 
