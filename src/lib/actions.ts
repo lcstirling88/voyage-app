@@ -774,7 +774,11 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
   try {
     const response = await anthropic.messages.create({
       model: PARSER_MODEL,
-      max_tokens: 4096,
+      // A WHOLE-trip plan is many items of JSON. Too small a ceiling truncates
+      // the forced tool call mid-array → the JSON never closes → zero usable
+      // items come back (for reference, one single day uses 2048). 8192 fits a
+      // bounded first draft (~40 items, see the cap in the rules) comfortably.
+      max_tokens: 8192,
       system:
         `You are an expert local travel concierge building a day-by-day plan of specific, NAMED ` +
         `activities and restaurants. RULES:\n` +
@@ -789,7 +793,9 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
         `- Honour the ticked interests; you may add a few complementary classics. Respect budget and pace.\n` +
         `- Put restaurants at sensible meal sessions (lunch = afternoon, dinner = night).\n` +
         `- Name REAL places, never generic ("a museum"). One short sentence per note.\n` +
-        `- Don't duplicate things already on the itinerary.`,
+        `- Don't duplicate things already on the itinerary.\n` +
+        `- Keep it a focused FIRST DRAFT: about 2-3 per day and no more than ~40 across the whole ` +
+        `trip. The traveller can reimagine any day for more later.`,
       tools: [{
         name: 'save_plan',
         description: 'A day-by-day set of suggested activities and restaurants.',
@@ -828,12 +834,29 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
     }
     const items = (toolUse.input as { items?: PlanItem[] }).items ?? []
 
-    // Clear previous suggestions so regenerating doesn't pile up duplicates.
+    // A forced tool call that hits the token ceiling returns no usable items
+    // (the JSON array never closes). Surface that rather than silently
+    // "succeeding" with nothing — and DON'T wipe any existing suggestions.
+    if (items.length === 0) {
+      console.warn(`[generateTripPlan] empty plan (stop_reason=${response.stop_reason}) for ${tripSlug}`)
+      return { ok: false, error: 'Itinera couldn’t draft your plan just now. Please try again.' }
+    }
+
+    // Clear previous suggestions so regenerating doesn't pile up duplicates —
+    // only now that we have a fresh set in hand.
     await prisma.booking.deleteMany({
       where: { tripId: trip.id, status: 'idea' },
     })
 
     const count = await createSuggestionRows(trip, items, prefs)
+    console.log(`[generateTripPlan] ${tripSlug}: stop=${response.stop_reason} items=${items.length} written=${count}`)
+
+    // Items parsed but every one fell outside the trip dates (or failed
+    // validation). Tell the traveller instead of dropping them on an
+    // unchanged itinerary.
+    if (count === 0) {
+      return { ok: false, error: 'Itinera’s draft didn’t line up with your trip dates — please try again.' }
+    }
 
     revalidatePath(`/trips/${tripSlug}/itinerary`)
     revalidatePath(`/trips/${tripSlug}`, 'layout')
