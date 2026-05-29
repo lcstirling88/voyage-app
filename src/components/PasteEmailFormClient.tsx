@@ -4,57 +4,59 @@ import { useState, useTransition } from 'react'
 import { Sparkles, Send, Paperclip, X } from 'lucide-react'
 import { ingestPastedEmail } from '@/lib/actions'
 
+// Destination-neutral test fixtures for the parser — realistic confirmation
+// emails that don't assume any particular country.
 const samples: { label: string; from: string; subject: string; body: string }[] = [
   {
     label: 'Hotel confirmation',
-    from: 'reservations@parkhyatt.com',
-    subject: 'Booking confirmation — Park Hyatt Tokyo · 2 nights',
+    from: 'reservations@grandharbourhotel.com',
+    subject: 'Booking confirmation — Grand Harbour Hotel · 3 nights',
     body: `Dear Mr Christiansen,
 
-We're delighted to confirm your reservation at Park Hyatt Tokyo.
+We're delighted to confirm your reservation at Grand Harbour Hotel.
 
-Check-in: Friday, November 13, 2026 at 3:00 PM
-Check-out: Sunday, November 15, 2026 at 12:00 PM
-Nights: 2
-Room: Park Deluxe King
+Check-in: Friday, June 19, 2026 at 3:00 PM
+Check-out: Monday, June 22, 2026 at 11:00 AM
+Nights: 3
+Room: Harbour View King
 Guests: 2 adults
-Breakfast: Included in The Girandole
+Breakfast: Included
 
-Confirmation number: PHT-987-3344-LC
-Total: ¥168,000 (paid in full at booking)
+Confirmation number: GHH-204-8851-LC
+Total: AUD 720 (paid in full at booking)
 
-Address: 3-7-1-2 Nishi Shinjuku, Shinjuku-ku, Tokyo 163-1055
+Address: 14 Marine Parade, Waterfront District
 We look forward to welcoming you.`,
   },
   {
     label: 'Flight itinerary',
     from: 'noreply@qantas.com',
-    subject: 'Your Qantas booking — QF21 SYD–NRT — confirmed',
+    subject: 'Your Qantas booking — QF121 BNE–AKL — confirmed',
     body: `Booking reference: 7HK3PQ
 
-Outbound — Qantas QF21
-Sydney (SYD) → Tokyo Narita (NRT)
-Depart: November 12, 2026 at 09:35
-Arrive: November 12, 2026 at 18:20
-Aircraft: Airbus A330
+Outbound — Qantas QF121
+Brisbane (BNE) → Auckland (AKL)
+Depart: June 17, 2026 at 09:35
+Arrive: June 17, 2026 at 15:50
+Aircraft: Boeing 737
 Seats: 14A, 14B
-Baggage: 1 x 30kg checked
+Baggage: 1 x 23kg checked
 
-Total: AUD 1,840 (paid)`,
+Total: AUD 1,240 (paid)`,
   },
   {
     label: 'Restaurant reservation',
     from: 'no-reply@tablecheck.com',
-    subject: 'Reservation confirmed — Sushi Saito · table for 2',
+    subject: 'Reservation confirmed — The Waterfront Grill · table for 2',
     body: `Your reservation is confirmed.
 
-Restaurant: Sushi Saito
-Date: Saturday November 14, 2026
+Restaurant: The Waterfront Grill
+Date: Saturday June 20, 2026
 Time: 19:00
 Party size: 2
 Booking ID: TC-44892
-Cancellation: 48 hours
-Note: ¥40,000 per person estimated.`,
+Cancellation: 24 hours
+Note: Mains around AUD 45.`,
   },
 ]
 

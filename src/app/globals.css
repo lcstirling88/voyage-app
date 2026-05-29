@@ -60,18 +60,10 @@ body {
   background-size: 18px 18px;
 }
 
-/* Placeholder gradients used in place of photography */
-.img-tokyo-hotel  { background: linear-gradient(135deg,#1a1f2e 0%, #2d3142 50%, #51527a 100%); }
-.img-kyoto-ryokan { background: linear-gradient(135deg,#3d2820 0%, #5e3a2a 45%, #8b5a3c 100%); }
-.img-nara         { background: linear-gradient(135deg,#3a4a2e 0%, #5e7144 55%, #8ca068 100%); }
-.img-hakone       { background: linear-gradient(135deg,#1f3a4a 0%, #4a6d82 55%, #b5c5d1 100%); }
-.img-fushimi      { background: linear-gradient(135deg,#7a2e2a 0%, #a8413a 50%, #d89695 100%); }
-.img-teamlab      { background: linear-gradient(135deg,#1a1138 0%, #4a2a7a 50%, #9b6dd4 100%); }
-.img-tsukiji      { background: linear-gradient(135deg,#3a2520 0%, #7a4a2a 50%, #c08c5e 100%); }
-.img-arashiyama   { background: linear-gradient(135deg,#1f3a2a 0%, #3f5b4e 50%, #8ba88c 100%); }
-.img-shibuya      { background: linear-gradient(135deg,#0a1a2e 0%, #1a3658 50%, #4a7eb8 100%); }
-.img-meiji        { background: linear-gradient(135deg,#2a3a2a 0%, #4a5e4a 50%, #8aa088 100%); }
-.img-ginza        { background: linear-gradient(135deg,#1a1a1a 0%, #3a3a3a 50%, #a89070 100%); }
+/* Generic placeholder gradients used in place of photography, keyed by
+   booking type (not destination). The old Tokyo/Kyoto-specific gradients
+   were removed — they were leftovers from the original single-trip prototype
+   and no longer referenced anywhere. */
 .img-flight       { background: linear-gradient(135deg,#0a1018 0%, #1d2638 60%, #4a5878 100%); }
 .img-restaurant   { background: linear-gradient(135deg,#1a1410 0%, #3a2818 50%, #6a4830 100%); }
 .img-activity     { background: linear-gradient(135deg,#3f5b4e 0%, #5e7e6a 60%, #b0c4ad 100%); }
