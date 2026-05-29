@@ -73,10 +73,23 @@ export default async function ProfilePage() {
         <div className="w-12" />
       </header>
 
+      {/* Identity masthead — you first; the framed atlas follows as the hero. */}
+      <div className="max-w-3xl mx-auto px-5 sm:px-8 pt-6 sm:pt-8">
+        <div className="flex items-center gap-4 sm:gap-5 pb-5 sm:pb-6 border-b border-line">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-sage grid place-items-center text-paper-pure font-display text-lg sm:text-2xl shrink-0">
+            {initial}
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-display text-xl sm:text-3xl truncate leading-tight">{displayName}</h1>
+            <p className="text-xs sm:text-sm text-ink-muted truncate">{user.email}</p>
+          </div>
+        </div>
+      </div>
+
       {/* ---------- HERO: framed atlas. Sized to match the supporting detail
            column below — feels more like a single composed page than a wide
            artifact + a narrow column under it. ---------- */}
-      <div className="max-w-3xl mx-auto px-3 sm:px-8 pt-6 sm:pt-10">
+      <div className="max-w-3xl mx-auto px-3 sm:px-8 pt-6 sm:pt-8">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted text-center mb-4 sm:mb-5">
           My passport
         </div>
@@ -152,17 +165,6 @@ export default async function ProfilePage() {
       {/* ---------- Identity + detail, in a narrower column ---------- */}
       <div className="max-w-3xl mx-auto px-5 sm:px-10 mt-12 sm:mt-16 pb-12 sm:pb-16">
         <div className="pt-6 border-t border-line">
-          <div className="flex items-center gap-4 sm:gap-5">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-sage grid place-items-center text-paper-pure font-display text-xl sm:text-2xl shrink-0">
-              {initial}
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">My profile</div>
-              <h1 className="h-display text-2xl sm:text-4xl mt-0.5 truncate">{displayName}</h1>
-              <p className="text-xs sm:text-sm text-ink-muted truncate">{user.email}</p>
-            </div>
-          </div>
-
           {/* Countries Visited — single full-width stat with a medallion-style
               tier badge. Tier ladder lives in lib/atlas (tierForCountryCount). */}
           <div className="mt-6 sm:mt-8">
