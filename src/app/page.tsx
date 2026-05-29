@@ -16,27 +16,48 @@ const ROUTE_CORAL = '#F08080'  // Light Coral — origin/destination dots
 
 export default function WelcomePage() {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-paper-pure">
-      {/* Decorative dotted-route SVG in the background — very faint terracotta,
-          evokes the brand mark (origin → destination arc) without distracting
-          from the centred hero. */}
+    <main
+      className="relative min-h-screen overflow-hidden"
+      style={{
+        // Soft, airy wash within the palette — Uranium glow top-right,
+        // a faint Coral glow bottom-left, over a white→mist gradient.
+        background:
+          'radial-gradient(70% 55% at 82% -5%, rgba(127,201,227,0.32) 0%, transparent 60%), ' +
+          'radial-gradient(60% 55% at 8% 105%, rgba(240,128,128,0.16) 0%, transparent 60%), ' +
+          'linear-gradient(180deg, #FFFFFF 0%, #E7F0FA 100%)',
+      }}
+    >
+      {/* Decorative dotted flight-path arcing across the page — brighter now,
+          a gradient Uranium→Spanish line with glowing coral waypoints. */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
         viewBox="0 0 1200 800"
         preserveAspectRatio="xMidYMid slice"
         aria-hidden
       >
+        <defs>
+          <linearGradient id="routeGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#7FC9E3" />
+            <stop offset="100%" stopColor={ROUTE_BLUE} />
+          </linearGradient>
+        </defs>
         <path
           d="M 80 620 Q 360 200 720 380 Q 980 480 1140 220"
-          stroke={ROUTE_BLUE}
-          strokeWidth="1.5"
-          strokeDasharray="4 10"
-          opacity="0.20"
+          stroke="url(#routeGrad)"
+          strokeWidth="2.5"
+          strokeDasharray="3 12"
+          strokeLinecap="round"
+          opacity="0.5"
           fill="none"
         />
-        <circle cx="80" cy="620" r="5" fill={ROUTE_CORAL} opacity="0.4" />
-        <circle cx="720" cy="380" r="5" fill={ROUTE_CORAL} opacity="0.4" />
-        <circle cx="1140" cy="220" r="5" fill={ROUTE_CORAL} opacity="0.4" />
+        {[
+          [80, 620], [720, 380], [1140, 220],
+        ].map(([cx, cy]) => (
+          <g key={`${cx}-${cy}`}>
+            <circle cx={cx} cy={cy} r="12" fill={ROUTE_CORAL} opacity="0.16" />
+            <circle cx={cx} cy={cy} r="5.5" fill={ROUTE_CORAL} opacity="0.85" />
+          </g>
+        ))}
       </svg>
 
       {/* Top navigation — just the two section links. */}
