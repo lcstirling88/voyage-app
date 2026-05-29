@@ -9,6 +9,8 @@ import Link from 'next/link'
 import { ChevronLeft, Compass, ArrowRight } from 'lucide-react'
 import { listDestinations } from '@/lib/destinations'
 import { ItineraBrand } from '@/components/ItineraBrand'
+import { LANDING_PHOTOS } from '@/lib/landing-photos'
+import { InspirationGalleryClient } from '@/components/InspirationGalleryClient'
 
 /** A short editorial pitch per destination — what makes it special. */
 const PITCHES: Record<string, string> = {
@@ -61,7 +63,19 @@ export default function InspirationPage() {
           start a trip, forward your bookings, and Itinera does the rest.
         </p>
 
-        <div className="mt-10 sm:mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        {/* Off-the-beaten-path gallery — the lesser-known places that rotate
+            one-per-day on the landing page, shown all at once. */}
+        <div className="mt-10 sm:mt-12">
+          <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted mb-3 sm:mb-4">
+            Off the beaten path
+          </div>
+          <InspirationGalleryClient photos={LANDING_PHOTOS} />
+        </div>
+
+        <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted mt-12 sm:mt-16 mb-3 sm:mb-4">
+          Or start with a country
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {destinations.map((d) => {
             if (!d.isoNumeric) return null
             const pitch = PITCHES[d.isoNumeric] ?? ''
