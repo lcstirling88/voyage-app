@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { FileText, Bed, Ticket, Upload, ExternalLink, Image as ImageIcon } from 'lucide-react'
 import { prisma } from '@/lib/db'
+import { requireTripAccess } from '@/lib/session'
 import { InlineDeleteButton } from '@/components/InlineDeleteButton'
 
 const inboxDomain = process.env.NEXT_PUBLIC_INBOX_DOMAIN ?? 'voyage.local'
@@ -17,6 +18,9 @@ const fileIcon = (mimeType: string) =>
 
 export default async function DocumentsPage({ params }: { params: Promise<{ tripSlug: string }> }) {
   const { tripSlug } = await params
+  // Defence-in-depth: this page renders Blob URLs for passports / e-tickets, so
+  // re-check trip access here rather than trusting only the layout gate.
+  await requireTripAccess(tripSlug)
   const trip = await prisma.trip.findUnique({
     where: { slug: tripSlug },
     include: { documents: { orderBy: { createdAt: 'asc' } } },

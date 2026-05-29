@@ -1,11 +1,10 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ChevronLeft, ExternalLink } from 'lucide-react'
-import { format } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
 import { BookingEditFormClient } from '@/components/BookingEditFormClient'
-import { safeJson } from '@/lib/format'
+import { safeJson, fmtDateInput, fmtTime } from '@/lib/format'
 
 const TYPE_LABELS: Record<string, string> = {
   hotel: 'Hotel', flight: 'Flight', activity: 'Activity',
@@ -56,10 +55,10 @@ export default async function BookingPage({ params }: { params: Promise<{ tripSl
             type: booking.type,
             title: booking.title,
             vendor: booking.vendor,
-            date: format(booking.startAt, 'yyyy-MM-dd'),
-            time: format(booking.startAt, 'HH:mm'),
-            endDate: booking.endAt ? format(booking.endAt, 'yyyy-MM-dd') : '',
-            endTime: booking.endAt ? format(booking.endAt, 'HH:mm') : '',
+            date: fmtDateInput(booking.startAt),
+            time: fmtTime(booking.startAt),
+            endDate: booking.endAt ? fmtDateInput(booking.endAt) : '',
+            endTime: booking.endAt ? fmtTime(booking.endAt) : '',
             location: booking.location,
             address: booking.address,
             confirmationCode: booking.confirmationCode,
@@ -68,8 +67,8 @@ export default async function BookingPage({ params }: { params: Promise<{ tripSl
             currency: booking.currency ?? booking.trip.homeCurrency,
             paid: booking.paid,
             paymentMethod: booking.paymentMethod,
-            cancelDate: booking.cancelByAt ? format(booking.cancelByAt, 'yyyy-MM-dd') : '',
-            cancelTime: booking.cancelByAt ? format(booking.cancelByAt, 'HH:mm') : '',
+            cancelDate: booking.cancelByAt ? fmtDateInput(booking.cancelByAt) : '',
+            cancelTime: booking.cancelByAt ? fmtTime(booking.cancelByAt) : '',
             cancellationPolicy: booking.cancellationPolicy,
             checkIn: meta.checkIn ?? '',
             checkOut: meta.checkOut ?? '',

@@ -127,11 +127,16 @@ function normalizeFromPostmark(payload: InboundPayload): NormalizedEmail {
 
 export async function POST(req: NextRequest) {
   const expectedSecret = process.env.INBOUND_WEBHOOK_SECRET
-  if (expectedSecret) {
-    const provided = req.headers.get('x-webhook-secret')
-    if (provided !== expectedSecret) {
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
-    }
+  if (!expectedSecret) {
+    // Fail closed: with no configured secret we cannot authenticate the sender,
+    // so refuse the request rather than accept unauthenticated email injection.
+    // (Prod sets this and the Cloudflare worker forwards the matching header.)
+    console.error('[email-inbound] INBOUND_WEBHOOK_SECRET is not set — rejecting request')
+    return NextResponse.json({ ok: false, error: 'Webhook not configured' }, { status: 503 })
+  }
+  const provided = req.headers.get('x-webhook-secret')
+  if (provided !== expectedSecret) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
   }
 
   let payload: InboundPayload

@@ -1589,6 +1589,12 @@ export async function reparseEmailWithFiles(formData: FormData): Promise<Reparse
   })
   if (!email || !email.trip) return { success: false, error: 'Email or trip not found.' }
 
+  // Auth — must have access to the trip this email belongs to before we upload
+  // attachments, run the parser, or mutate any bookings/documents. Without this
+  // a signed-out caller could target any email id and inject files / overwrite
+  // another trip's data (IDOR).
+  await requireTripAccess(email.trip.slug)
+
   const rawAttachments = formData.getAll('attachments').filter((v): v is File => v instanceof File && v.size > 0)
   if (rawAttachments.length === 0) {
     return { success: false, error: 'Add at least one file (PDF, image, .ics) before re-parsing.' }

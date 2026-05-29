@@ -6,8 +6,8 @@
  * code change. This is where the product earns: a kept idea becomes a booking.
  */
 
-import { format } from 'date-fns'
 import type { Booking } from '@prisma/client'
+import { fmtDateInput } from './format'
 
 const BOOKING_AID = process.env.AFFILIATE_BOOKING_AID || ''       // Booking.com partner aid
 const GYG_PARTNER = process.env.AFFILIATE_GETYOURGUIDE_ID || ''   // GetYourGuide partner_id
@@ -39,8 +39,8 @@ export function bookingLinkFor(
   switch (booking.type) {
     case 'hotel': {
       const params = new URLSearchParams({ ss: title })
-      params.set('checkin', format(booking.startAt, 'yyyy-MM-dd'))
-      if (booking.endAt) params.set('checkout', format(booking.endAt, 'yyyy-MM-dd'))
+      params.set('checkin', fmtDateInput(booking.startAt))
+      if (booking.endAt) params.set('checkout', fmtDateInput(booking.endAt))
       if (BOOKING_AID) params.set('aid', BOOKING_AID)
       return { label: 'Book it', url: `https://www.booking.com/searchresults.html?${params.toString()}` }
     }

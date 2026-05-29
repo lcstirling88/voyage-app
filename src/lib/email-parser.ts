@@ -300,9 +300,11 @@ function parseWithMock(email: EmailInput): ParserResult {
   const subject = email.subject.toLowerCase()
   const body = email.text.toLowerCase()
 
-  // Car rental shaped
+  // Car rental shaped. Parenthesise the subject group: without it, `&&` binds
+  // tighter than `||`, so any subject containing "rental"/"car hire" matched
+  // regardless of the body. We want (rental-ish subject) AND (car-ish body).
   if (
-    subject.includes('rental') || subject.includes('car hire') || subject.includes('booking') &&
+    (subject.includes('rental') || subject.includes('car hire') || subject.includes('booking')) &&
     (body.includes('pick up') || body.includes('pickup') || body.includes('rental car') ||
      body.includes('hertz') || body.includes('avis') || body.includes('budget rent'))
   ) {

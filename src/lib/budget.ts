@@ -10,7 +10,9 @@
  * Currency & party size: AI estimates are captured PER PERSON in the trip's
  * home currency (see createSuggestionRows / the planner tool schemas), so a
  * party total is estimate × party size. Real booked costs are already party
- * totals (what the traveller actually paid), so they're taken as-is.
+ * totals (what the traveller actually paid) but in the booking's OWN currency,
+ * so they're converted to the home currency before being mixed with estimates —
+ * otherwise a single foreign-currency booking would silently corrupt the total.
  */
 
 import { startOfDay, addDays } from 'date-fns'
@@ -29,16 +31,24 @@ const FOOD_PER_PERSON_PER_DAY_USD = 60
 
 /**
  * A booking's cost expressed as a PARTY total. Real booked rows are already
- * party totals (what the traveller actually paid); estimate rows from the
- * planner (idea / planned / to_book) are captured PER PERSON, so they scale by
- * party size. Centralised so every money surface applies the same convention.
+ * party totals (what the traveller actually paid) in the booking's OWN currency;
+ * pass `homeCurrency` to convert them so a foreign-currency booking doesn't
+ * corrupt a home-currency sum. Estimate rows from the planner (idea / planned /
+ * to_book) are captured PER PERSON in the home currency already, so they scale
+ * by party size with no conversion. Omit `homeCurrency` to get the native booked
+ * amount (for per-row display next to the booking's own currency symbol).
+ * Centralised so every money surface applies the same convention.
  */
 export function bookingPartyCost(
-  b: { status: string; cost: number | null },
+  b: { status: string; cost: number | null; currency?: string | null },
   partySize: number,
+  homeCurrency?: string,
 ): number {
   if (b.cost == null) return 0
-  return b.status === 'booked' ? b.cost : b.cost * Math.max(1, partySize)
+  if (b.status === 'booked') {
+    return homeCurrency ? convertCurrency(b.cost, b.currency ?? homeCurrency, homeCurrency) : b.cost
+  }
+  return b.cost * Math.max(1, partySize)
 }
 
 /** Statuses that represent real or kept spend (everything except unkept ideas). */
@@ -67,7 +77,7 @@ export type PlanBudget = {
   itemCount: number
 }
 
-type BudgetInput = Pick<Booking, 'type' | 'status' | 'cost' | 'metadata' | 'startAt'>
+type BudgetInput = Pick<Booking, 'type' | 'status' | 'cost' | 'currency' | 'metadata' | 'startAt'>
 
 /**
  * The plan's budget amount is stashed on each suggestion's prefs metadata (no
@@ -118,7 +128,9 @@ export function computePlanBudget(
     }
     if (!EXPERIENCE_TYPES.has(b.type) || b.cost == null) continue
     if (b.status === 'booked') {
-      booked += b.cost // already a party total
+      // Already a party total, but in the booking's own currency — convert to
+      // home so foreign-currency bookings don't skew the mixed total.
+      booked += convertCurrency(b.cost, b.currency ?? opts.homeCurrency, opts.homeCurrency)
       itemCount++
     } else if (b.status === 'planned' || b.status === 'to_book') {
       planned += b.cost * partySize

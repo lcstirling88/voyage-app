@@ -205,8 +205,17 @@ async function findDuplicateBooking(tripId: string, b: ParsedBooking): Promise<B
       },
       orderBy: { startAt: 'asc' },
     })
-    const fuzzy = placeholders.find((c) => titlesLooselyMatch(c.title, b.title, b.type))
-    if (fuzzy) return fuzzy
+    const matches = placeholders.filter((c) => titlesLooselyMatch(c.title, b.title, b.type))
+    if (matches.length > 0) {
+      // Several loose placeholders can share a day — e.g. a generic "Lunch" and a
+      // "Dinner", both of which match any restaurant. Graduate the one closest in
+      // time to the incoming confirmation rather than the earliest, so a 7pm
+      // dinner doesn't absorb the noon lunch slot. (NaN start → keeps the first.)
+      const target = parseLocalDateTime(b.startAt).getTime()
+      return matches.reduce((best, c) =>
+        Math.abs(c.startAt.getTime() - target) < Math.abs(best.startAt.getTime() - target) ? c : best
+      )
+    }
   }
 
   return null

@@ -22,7 +22,21 @@ export function fmtDateLong(date: Date) {
 }
 
 export function fmtTime(date: Date) {
-  return format(date, 'HH:mm')
+  // Booking times are stored as UTC wall-clock (offsets are stripped on ingest),
+  // so read them back with UTC getters. Local-zone formatting would shift the
+  // displayed time on any non-UTC machine — it only happens to agree on a UTC
+  // server like Vercel, and silently breaks local dev / non-UTC hosts.
+  return `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`
+}
+
+/**
+ * UTC `yyyy-MM-dd` for prefilling <input type="date">. Booking date/time is
+ * stored as UTC wall-clock, so format with UTC getters — local-zone formatting
+ * can roll the date back/forward a day on non-UTC machines and corrupt the
+ * stored value when the form is saved.
+ */
+export function fmtDateInput(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
 }
 
 export function fmtDateRange(start: Date, end: Date) {

@@ -27,8 +27,8 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
   // per-person estimate rows are scaled to party totals so the headline figure
   // isn't a mix of per-person and whole-party numbers.
   const committedBookings = trip.bookings.filter((b) => isCommittedStatus(b.status) && b.cost != null)
-  const totalBudget = committedBookings.reduce((s, b) => s + bookingPartyCost(b, pax), 0)
-  const paid = committedBookings.filter((b) => b.paid).reduce((s, b) => s + bookingPartyCost(b, pax), 0)
+  const totalBudget = committedBookings.reduce((s, b) => s + bookingPartyCost(b, pax, trip.homeCurrency), 0)
+  const paid = committedBookings.filter((b) => b.paid).reduce((s, b) => s + bookingPartyCost(b, pax, trip.homeCurrency), 0)
   const upcoming = totalBudget - paid
   const paidPct = totalBudget ? (paid / totalBudget) * 100 : 0
   const days = Math.max(1, differenceInDays(trip.endDate, trip.startDate) + 1)
@@ -50,7 +50,7 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
       : b.type === 'restaurant' ? 'Food & dining'
       : b.type === 'activity' ? 'Activities'
       : 'Transit & misc'
-    byCat[key] = (byCat[key] ?? 0) + bookingPartyCost(b, pax)
+    byCat[key] = (byCat[key] ?? 0) + bookingPartyCost(b, pax, trip.homeCurrency)
   }
   const catColors: Record<string, string> = {
     'Lodging': 'bg-sage',
