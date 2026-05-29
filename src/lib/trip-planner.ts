@@ -62,7 +62,9 @@ async function generateUncached(destination: string, cities: string): Promise<Pl
         `(actual attractions, experiences, neighbourhoods, signature dishes, day trips — never generic ` +
         `labels like "a museum"). Return 5-7 categories, each with 4-8 options. Keep option labels short ` +
         `(2-5 words). Include a mix: signature attractions, museums/culture, food & dining, quirky/local ` +
-        `experiences, outdoors, and day trips. Tailor everything tightly to the destination.`,
+        `experiences, outdoors, and short local day trips. Tailor everything to the SPECIFIC cities/areas ` +
+        `named in the user message — every option must be in one of those cities; never include ` +
+        `attractions from any other city.`,
       tools: [{
         name: 'save_plan_options',
         description: 'Destination-specific categories of taggable things to do.',

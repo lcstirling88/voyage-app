@@ -595,6 +595,12 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
       }).join('\n')
     : `  (no accommodation booked yet — assume the whole trip is around ${trip.destination})`
 
+  // The cities the trip actually visits (from where they sleep). Suggestions
+  // must stay within these — the model otherwise wanders to famous cities
+  // (e.g. adding Kyoto to a Tokyo + Hokkaido trip).
+  const tripCities = [...new Set(hotels.map((h) => cityForBooking(h)).filter((c): c is string => !!c))]
+  const citiesLine = tripCities.length ? tripCities.join(', ') : trip.destination
+
   // What's already planned, so the model fills gaps rather than clashing.
   const existing = bookings.filter((b) => b.type !== 'hotel')
   const existingByDay = existing.length
@@ -616,10 +622,11 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
   const context =
     `Trip: ${trip.name}\n` +
     `Destination: ${trip.destination}\n` +
+    `Cities on this trip — suggest ONLY places in these, never any other city: ${citiesLine}\n` +
     `Dates: ${format(trip.startDate, 'yyyy-MM-dd')} to ${format(trip.endDate, 'yyyy-MM-dd')}\n` +
     `Party: ${trip.adultCount} adult(s)${trip.childCount ? `, ${trip.childCount} child(ren)${trip.childrenAges ? ` aged ${trip.childrenAges}` : ''}` : ''}\n` +
     `Local currency: ${trip.localCurrency ?? trip.homeCurrency}\n\n` +
-    `Accommodation timeline (where they're based each night):\n${basedIn}\n\n` +
+    `Accommodation timeline (which city they're based in each night; for any day not covered, use the nearest listed city by date — never introduce a new city):\n${basedIn}\n\n` +
     `Already on the itinerary (don't duplicate; build around these):\n${existingByDay}\n\n` +
     `Interests they ticked:\n${interests.length ? interests.map((i) => `  - ${i}`).join('\n') : '  - (open — surprise them with the classics)'}\n\n` +
     `${budgetText}\nPace: ${paceText}`
@@ -631,6 +638,9 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
       system:
         `You are an expert local travel concierge building a day-by-day plan of specific, NAMED ` +
         `activities and restaurants. RULES:\n` +
+        `- CRITICAL: only suggest places located in the cities listed under "Cities on this trip". ` +
+        `Never suggest anything in any other city (e.g. do not add Kyoto, Osaka or Nara unless they are ` +
+        `in that list). No long-distance day trips.\n` +
         `- Use only dates within the trip range.\n` +
         `- Each date, the traveller is based in the city from the accommodation timeline — keep that ` +
         `day's suggestions in or very near that city.\n` +

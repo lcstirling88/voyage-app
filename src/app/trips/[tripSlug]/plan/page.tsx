@@ -11,16 +11,26 @@
  */
 
 import { Sparkles } from 'lucide-react'
+import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
 import { getTripSegments } from '@/lib/segments'
+import { cityForBooking } from '@/lib/itinerary'
 import { generatePlanOptions } from '@/lib/trip-planner'
 import { PlanTripFormClient } from '@/components/PlanTripFormClient'
 
 export default async function PlanPage({ params }: { params: Promise<{ tripSlug: string }> }) {
   const { tripSlug } = await params
   const { trip } = await requireTripAccess(tripSlug)
-  const segments = await getTripSegments(trip)
-  const cities = segments.map((s) => s.country).join(', ')
+  // Confine options to the cities the trip actually visits (where they stay),
+  // falling back to the trip's countries if there are no hotels yet.
+  const hotels = await prisma.booking.findMany({
+    where: { tripId: trip.id, type: 'hotel' },
+    select: { location: true, address: true },
+  })
+  const hotelCities = [...new Set(hotels.map((h) => cityForBooking(h)).filter((c): c is string => !!c))]
+  const cities = hotelCities.length
+    ? hotelCities.join(', ')
+    : (await getTripSegments(trip)).map((s) => s.country).join(', ')
   const categories = await generatePlanOptions(trip.destination, cities)
 
   return (
