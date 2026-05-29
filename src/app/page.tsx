@@ -13,6 +13,7 @@ import Link from 'next/link'
 import { User as UserIcon, Compass, Sparkles, ArrowRight } from 'lucide-react'
 import { ItineraBrand } from '@/components/ItineraBrand'
 import { photoOfTheDay } from '@/lib/landing-photos'
+import { LandingPhotoClient } from '@/components/LandingPhotoClient'
 
 // Re-render periodically so the photo-of-the-day advances at midnight without
 // needing a redeploy (the page is otherwise static).
@@ -122,23 +123,7 @@ export default function WelcomePage() {
       </div>
 
       {/* RIGHT — daily inspiration photograph with a "what + where" caption. */}
-      <aside className="relative overflow-hidden min-h-[42vh] md:min-h-screen bg-ink/5">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={photo.src}
-          alt={`${photo.place}, ${photo.country} — ${photo.blurb}`}
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ objectPosition: photo.objectPosition ?? 'center' }}
-        />
-        <figcaption className="absolute inset-x-0 bottom-0 p-5 sm:p-7 bg-gradient-to-t from-black/65 via-black/30 to-transparent">
-          <div className="text-white/85 text-[10px] uppercase tracking-[0.22em]">
-            {photo.place} · {photo.country}
-          </div>
-          <p className="text-white text-sm sm:text-base mt-1.5 leading-snug max-w-md">
-            {photo.blurb}
-          </p>
-        </figcaption>
-      </aside>
+      <LandingPhotoClient photo={photo} />
     </main>
   )
 }
