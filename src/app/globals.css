@@ -19,8 +19,8 @@
   --color-paper-pure: #FCF7EF; /* warm paper white */
   --color-paper-card: #FCF7EF;
 
-  --color-line: #E7D8C2;
-  --color-line-soft: #F1E7D6;
+  --color-line: #AEB184;      /* muted olive — gives card/divider edges definition */
+  --color-line-soft: #DDDEC4; /* pale olive — soft tracks / faint dividers */
 
   --color-sage: #B5633C;       /* Terracotta — primary */
   --color-sage-soft: #F0DCCB;
