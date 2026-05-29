@@ -1014,6 +1014,26 @@ export async function setHomeCountry(formData: FormData): Promise<
   return { ok: true }
 }
 
+/**
+ * Set (or clear) the user's passport / nationality. Submitting an empty
+ * isoNumeric clears it, falling back to the home country for visa rules.
+ * Drives per-destination visa & entry requirements.
+ */
+export async function setPassport(formData: FormData): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const user = await requireUser()
+  const isoNumeric = String(formData.get('isoNumeric') ?? '').trim()
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { nationalityIso: isoNumeric || null },
+  })
+
+  revalidatePath('/profile')
+  return { ok: true }
+}
+
 // ----- Trip segments (multi-country legs) -------------------------------------------
 
 export type AddSegmentResult = { ok: true } | { ok: false; error: string }

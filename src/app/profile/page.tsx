@@ -19,6 +19,7 @@ import { listDestinations } from '@/lib/destinations'
 import { ItineraBrand } from '@/components/ItineraBrand'
 import { WorldMapSvg } from '@/components/WorldMapSvg'
 import { HomeCountryPickerClient } from '@/components/HomeCountryPickerClient'
+import { PassportPickerClient } from '@/components/PassportPickerClient'
 import { CountriesBadge } from '@/components/CountriesBadge'
 import { ActiveTripCard } from '@/components/ActiveTripCard'
 
@@ -32,7 +33,7 @@ const GOLD_MAIN_GRADIENT = `linear-gradient(135deg, ${GOLD_HIGHLIGHT} 0%, ${GOLD
 export default async function ProfilePage() {
   const user = await requireUser()
   const {
-    countries, homeCountry, homeCountryIso,
+    countries, homeCountry, homeCountryIso, nationalityIso,
     totalDays,
   } = await loadAtlasForUser(user.id)
   const renderHints = renderHintsFromCountries(countries, homeCountryIso)
@@ -133,12 +134,17 @@ export default async function ProfilePage() {
         {/* "Based in" — small editorial caption with inline picker. Sits
             outside the framed-atlas link so the select interactions don't
             fight with the link's navigation. */}
-        <div className="mt-3 sm:mt-4 text-center">
+        <div className="mt-3 sm:mt-4 flex flex-col items-center gap-1.5">
           <HomeCountryPickerClient
             options={destinationOptions}
             currentIso={homeCountryIso}
             currentLabel={homeCountry?.label ?? null}
             currentIcon={homeCountry?.passportIcon ?? null}
+          />
+          <PassportPickerClient
+            options={destinationOptions}
+            passportIso={nationalityIso}
+            homeIso={homeCountryIso}
           />
         </div>
       </div>

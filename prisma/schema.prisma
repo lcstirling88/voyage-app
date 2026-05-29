@@ -26,6 +26,12 @@ model User {
   // separates it from travel destinations in the country list + stats.
   homeCountryIso String?
 
+  // ISO 3166-1 numeric of the user's PASSPORT (nationality). Drives visa /
+  // entry requirements per destination. Falls back to homeCountryIso when
+  // unset — so most users never touch it, but a British-passport holder
+  // living in Australia can set their real passport once.
+  nationalityIso String?
+
   accounts         Account[]
   sessions         Session[]
   memberships      Membership[]

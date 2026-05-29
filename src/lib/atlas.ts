@@ -147,6 +147,8 @@ export async function loadAtlasForUser(userId: string): Promise<{
   homeCountry: AtlasCountrySummary | null
   /** ISO 3166-1 numeric of the home country, or null. */
   homeCountryIso: string | null
+  /** ISO 3166-1 numeric of the user's passport, or null (falls back to home). */
+  nationalityIso: string | null
   /** Days summed across `countries` only (excludes home). */
   totalDays: number
   /** All memberships, including domestic trips. */
@@ -154,7 +156,7 @@ export async function loadAtlasForUser(userId: string): Promise<{
   manualByIso: Map<string, AtlasManualVisit>
 }> {
   const [user, memberships, visited] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { homeCountryIso: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { homeCountryIso: true, nationalityIso: true } }),
     prisma.membership.findMany({
       where: { userId },
       include: { trip: true },
@@ -163,6 +165,7 @@ export async function loadAtlasForUser(userId: string): Promise<{
     prisma.visitedCountry.findMany({ where: { userId } }),
   ])
   const homeIso = user?.homeCountryIso ?? null
+  const nationalityIso = user?.nationalityIso ?? null
   const trips = memberships.map((m) => m.trip)
 
   const today = startOfDay(new Date())
@@ -274,6 +277,7 @@ export async function loadAtlasForUser(userId: string): Promise<{
     countries,
     homeCountry,
     homeCountryIso: homeIso,
+    nationalityIso,
     totalDays: countries.reduce((s, c) => s + c.totalDays, 0),
     totalTrips: trips.length,
     manualByIso,
