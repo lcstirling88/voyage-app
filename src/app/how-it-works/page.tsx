@@ -13,11 +13,15 @@ import { ItineraBrand } from '@/components/ItineraBrand'
 const STEPS: { title: string; body: string }[] = [
   {
     title: 'Start a trip',
-    body: 'Name where you’re going and when. Itinera sets up the itinerary, the local clock, the currency and a first weather outlook before you’ve even booked.',
+    body: 'Name where you’re going, when, and who’s coming — a couple, a family with young kids, four friends and their ages. That last detail shapes everything that follows.',
   },
   {
-    title: 'Forward your bookings',
-    body: 'Send flight, hotel, restaurant and tour confirmations to your trip’s private inbox address — attachments and PDFs included. Forwarding is all it takes.',
+    title: 'Let Itinera plan it',
+    body: 'Don’t fancy a blank page? Itinera suggests a day-by-day plan built around your group — an easy pace and kid-friendly stops for families, late dinners and slow mornings for couples — balancing the must-sees with room to breathe. Soon you’ll be able to book the whole thing through trusted travel partners without leaving the page.',
+  },
+  {
+    title: 'Or forward what you’ve booked',
+    body: 'Already sorted some of it? Forward flight, hotel, restaurant and tour confirmations to your trip’s private inbox address — attachments and PDFs included. Forwarding is all it takes.',
   },
   {
     title: 'We read and file everything',
@@ -26,6 +30,10 @@ const STEPS: { title: string; body: string }[] = [
   {
     title: 'Everything in one calm place',
     body: 'Your day-by-day itinerary, historical weather and what to pack, local info and visa notes, costs and documents — one considered page that installs as an app and works on the move.',
+  },
+  {
+    title: 'Share with family and friends',
+    body: 'Invite the people you’re travelling with. Everyone sees the same up-to-date itinerary — flights, hotels, plans and who’s paid — so nobody’s digging through a group chat for the address of tonight’s dinner.',
   },
   {
     title: 'Collect the world',
@@ -50,11 +58,11 @@ export default function HowItWorksPage() {
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted flex items-center gap-2">
           <Sparkles className="w-3 h-3" /> How it works
         </div>
-        <h1 className="h-display text-4xl sm:text-6xl mt-2">From inbox to itinerary.</h1>
+        <h1 className="h-display text-4xl sm:text-6xl mt-2">Plan it, or forward it.</h1>
         <p className="text-ink-muted mt-3 max-w-2xl text-sm sm:text-base leading-relaxed">
-          Itinera turns the booking confirmations already landing in your inbox into a calm,
-          complete travel companion — no spreadsheets, no copying details across by hand.
-          Here’s the whole of it.
+          Two ways to a finished trip: tell Itinera who’s coming and let it plan the days for
+          you, or forward the bookings you’ve already made. Either way it all lands in one calm,
+          shareable place — no spreadsheets, no copying details across by hand.
         </p>
 
         <ol className="mt-10 sm:mt-12">
@@ -75,7 +83,7 @@ export default function HowItWorksPage() {
 
         <div className="mt-12 sm:mt-16 border-t border-line pt-8 text-center">
           <p className="font-display italic text-lg sm:text-xl text-ink-soft max-w-lg mx-auto">
-            Forward one booking and watch it appear.
+            Start with a plan, or start with your inbox.
           </p>
           <Link
             href="/inspiration"
