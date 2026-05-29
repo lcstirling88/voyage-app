@@ -27,7 +27,7 @@ export default function WelcomePage() {
   const photo = photoOfTheDay()
 
   return (
-    <main className="relative min-h-screen md:grid md:grid-cols-[1.05fr_0.95fr]">
+    <main className="relative min-h-screen md:grid md:grid-cols-[2fr_1fr]">
       {/* LEFT — brand poster over a warm wash + dotted route. */}
       <div
         className="relative overflow-hidden flex flex-col min-h-[58vh] md:min-h-screen"
