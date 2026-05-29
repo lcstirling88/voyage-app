@@ -23,12 +23,11 @@ import { PassportPickerClient } from '@/components/PassportPickerClient'
 import { CountriesBadge } from '@/components/CountriesBadge'
 import { ActiveTripCard } from '@/components/ActiveTripCard'
 
-// Frame palette — polished navy/blue lacquer (rebranded from the old gold),
-// reading as a single layer of brushed deep blue with a uranium catch-light.
-const GOLD_HIGHLIGHT = '#7FC9E3'   // uranium catch-light
-const GOLD_MID       = '#2E6FA8'   // spanish body
-const GOLD_DEEP      = '#1B2A55'   // delft shadow
-const GOLD_DARKEST   = '#0E1C3D'   // inset edge lines
+// Gold palette — warm tones tuned to read as a single layer of brushed metal.
+const GOLD_HIGHLIGHT = '#E8C078'   // catch-light
+const GOLD_MID       = '#B8893B'   // body
+const GOLD_DEEP      = '#8B6730'   // shadow
+const GOLD_DARKEST   = '#5C3F18'   // inset edge lines
 const GOLD_MAIN_GRADIENT = `linear-gradient(135deg, ${GOLD_HIGHLIGHT} 0%, ${GOLD_MID} 45%, ${GOLD_DEEP} 100%)`
 
 export default async function ProfilePage() {
@@ -93,10 +92,10 @@ export default async function ProfilePage() {
             style={{
               background: GOLD_MAIN_GRADIENT,
               boxShadow: `
-                inset 0 0 0 1px rgba(200, 235, 255, 0.5),
+                inset 0 0 0 1px rgba(255, 240, 200, 0.5),
                 inset 0 0 0 2px ${GOLD_DARKEST},
-                inset 0 0 0 6px rgba(200, 235, 255, 0.3),
-                0 10px 28px -14px rgba(27, 42, 85, 0.55),
+                inset 0 0 0 6px rgba(255, 240, 200, 0.3),
+                0 10px 28px -14px rgba(168, 129, 75, 0.55),
                 0 2px 6px -2px ${GOLD_DARKEST}
               `,
             }}

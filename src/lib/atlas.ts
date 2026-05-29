@@ -51,15 +51,15 @@ export type AtlasTierSpec = {
   tier: AtlasTier
   label: string
   stars: number       // 1-4, shown on the card
-  mapFill: string     // base sage fill on the world map
+  mapFill: string     // base greyscale fill on the world map
   isLived: boolean    // gates the gold edge + crown stamp
 }
 
 const TIERS: Record<AtlasTier, AtlasTierSpec> = {
-  touchdown: { tier: 'touchdown', label: 'Touchdown', stars: 1, mapFill: '#CFE6F4', isLived: false },
-  visited:   { tier: 'visited',   label: 'Visited',   stars: 2, mapFill: '#86C5E6', isLived: false },
-  explored:  { tier: 'explored',  label: 'Explored',  stars: 3, mapFill: '#2E86C9', isLived: false },
-  lived:     { tier: 'lived',     label: 'Lived',     stars: 4, mapFill: '#1B2A55', isLived: true },
+  touchdown: { tier: 'touchdown', label: 'Touchdown', stars: 1, mapFill: '#C3CAD2', isLived: false },
+  visited:   { tier: 'visited',   label: 'Visited',   stars: 2, mapFill: '#9BA4AF', isLived: false },
+  explored:  { tier: 'explored',  label: 'Explored',  stars: 3, mapFill: '#6E7682', isLived: false },
+  lived:     { tier: 'lived',     label: 'Lived',     stars: 4, mapFill: '#3C424B', isLived: true },
 }
 
 export function tierForDays(days: number): AtlasTierSpec {
@@ -111,17 +111,17 @@ export function tierForCountryCount(count: number): CountryBreadthSpec {
 
 /** Fill used for a country whose only trips are still upcoming (hatched pattern). */
 export const UPCOMING_ONLY_FILL = 'url(#hatch-upcoming)'
-/** Fill used for countries the user has no trips in. Two shades darker than
- *  the original very-pale beige so unvisited land reads clearly as land
- *  (not as ocean) and the visited sage tiers pop a little harder. */
-export const UNVISITED_FILL = '#D7DEE8'
-/** Coral border colour for the Lived tier — the brand accent against the
- *  deep-blue fill. */
-export const LIVED_EDGE_COLOR = '#F08080'
-/** Deep coral used for the user's country of residence — warm against the
- *  blue travel tiers, so "home" reads as a distinct category rather than
- *  another rung on the travel ladder. Edged with the coral Lived edge. */
-export const HOME_FILL = '#B5524F'
+/** Fill used for countries the user has no trips in — a light neutral grey,
+ *  clearly above the paler ocean so unvisited land still reads as land while
+ *  the greyscale visited tiers darken on top of it. */
+export const UNVISITED_FILL = '#DDE1E6'
+/** Gold border colour for the Lived tier — a warm metallic accent that ties
+ *  the greyscale map to its gold display frame. */
+export const LIVED_EDGE_COLOR = '#A8814B'
+/** Deep wine burgundy for the user's country of residence — a single warm
+ *  note against the greyscale travel tiers, so "home" reads as its own
+ *  category rather than another rung on the travel ladder. */
+export const HOME_FILL = '#6B2737'
 
 // ---------------------------------------------------------------------------
 // Trip aggregation — shared by /atlas and /atlas/map so the same trips
