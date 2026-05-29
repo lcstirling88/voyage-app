@@ -45,12 +45,46 @@ function resolveByIso(isoNumeric: string | null, country: string) {
 }
 
 /**
- * Best-effort legs derived from accommodation bookings: geocode each hotel's
- * location to a country, then merge consecutive same-country stays into legs.
- * The first/last legs stretch to cover the whole trip (arrival/departure days).
- * Returns [] when there are no hotels or none geocode — callers fall back to
- * the implicit single destination leg. Geocoding is cached (30d), and distinct
- * place strings are deduped + fetched in parallel to keep this cheap.
+ * Resolve a country straight from a booking's own free text — its address
+ * first, then its location. Real confirmations carry the full postal address,
+ * which ends in the country: a far more reliable signal than geocoding a place
+ * name, since Open-Meteo ranks geocoder hits by population (so a bare
+ * "Queenstown" lands in South Africa, not New Zealand, and "The Waterfront"
+ * lands in Cape Town). We read each field's comma-separated parts from the END
+ * first — the country conventionally trails an address — and take the first
+ * part that resolves to a destination we recognise. `profileForDestination`'s
+ * matchers are unanchored, so "…, New Zealand" matches even inside a longer
+ * string. Returns null when neither field names a known country, leaving the
+ * caller to fall back to geocoding. (Title is deliberately excluded: property
+ * names like "The Australian Hotel" would mis-match a country.)
+ */
+function countryProfileFromText(
+  ...texts: Array<string | null | undefined>
+): ReturnType<typeof profileForDestination> | null {
+  for (const text of texts) {
+    const parts = (text || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .reverse()
+    for (const part of parts) {
+      const p = profileForDestination(part)
+      if (p.label && p.label !== 'Unknown') return p
+    }
+  }
+  return null
+}
+
+/**
+ * Best-effort legs derived from accommodation bookings: resolve each hotel to a
+ * country, then merge consecutive same-country stays into legs. We resolve the
+ * country from the hotel's own text first (its address almost always ends in
+ * the country — a reliable, population-proof signal) and only geocode the place
+ * name when the text names no country we recognise. The first/last legs stretch
+ * to cover the whole trip (arrival/departure days). Returns [] when there are
+ * no hotels or none resolve — callers fall back to the implicit single leg.
+ * Geocoding is cached (30d); the places that still need it are deduped and
+ * fetched in parallel to keep this cheap.
  */
 async function deriveSegmentsFromBookings(trip: TripLike): Promise<ResolvedSegment[]> {
   const hotels = await prisma.booking.findMany({
@@ -61,27 +95,48 @@ async function deriveSegmentsFromBookings(trip: TripLike): Promise<ResolvedSegme
   if (hotels.length === 0) return []
 
   const placeOf = (h: (typeof hotels)[number]) => (h.location || h.address || h.title || '').trim()
-  const distinct = [...new Set(hotels.map(placeOf).filter(Boolean))]
-  // Bias ambiguous hotel place-names toward the trip's destination country so a
-  // "Queenstown" stay on a New Zealand trip isn't geocoded to South Africa. The
-  // hint only disambiguates same-named places; genuinely foreign cities (a
-  // distinct name) still fall through to the population-ranked match, so this
-  // stays safe for real multi-country trips.
+
+  // Bias the geocoder fallback toward the trip's destination country so an
+  // ambiguous city (e.g. a bare "Queenstown") resolves within the trip rather
+  // than to the most populous match worldwide. The hint only disambiguates
+  // same-named places; a genuinely foreign distinct city still resolves to its
+  // own country, so this stays safe for real multi-country trips.
   const destProfile = profileForDestination(trip.destination)
   const countryHint =
     destProfile.label && destProfile.label !== 'Unknown' ? destProfile.label : trip.destination.trim()
+
+  // Resolve each hotel's country from its own text first (reliable, no network,
+  // immune to the geocoder's population bias). Only the hotels we can't place
+  // that way need a geocode — dedupe those and fetch them in parallel.
+  const textProfiles = hotels.map((h) => countryProfileFromText(h.address, h.location))
+  const needGeo = [
+    ...new Set(
+      hotels.map((h, i) => (textProfiles[i] ? '' : placeOf(h))).filter(Boolean),
+    ),
+  ]
   const geoEntries = await Promise.all(
-    distinct.map(async (p) => [p, await geocodePlace(p, { countryHint })] as const),
+    needGeo.map(async (p) => [p, await geocodePlace(p, { countryHint })] as const),
   )
   const geoByPlace = new Map(geoEntries)
 
   type Leg = { country: string; profile: ReturnType<typeof profileForDestination>; start: Date; end: Date }
   const legs: Leg[] = []
-  for (const h of hotels) {
-    const geo = geoByPlace.get(placeOf(h))
-    if (!geo?.country) continue
-    const profile = profileForDestination(geo.country)
-    const country = profile.label && profile.label !== 'Unknown' ? profile.label : geo.country
+  for (let i = 0; i < hotels.length; i++) {
+    const h = hotels[i]
+    const textProfile = textProfiles[i]
+    let profile: ReturnType<typeof profileForDestination>
+    let country: string
+    if (textProfile) {
+      // Country stated in the booking text — trust it.
+      profile = textProfile
+      country = textProfile.label
+    } else {
+      // No stated country — fall back to the (hint-biased) geocode result.
+      const geo = geoByPlace.get(placeOf(h))
+      if (!geo?.country) continue
+      profile = profileForDestination(geo.country)
+      country = profile.label && profile.label !== 'Unknown' ? profile.label : geo.country
+    }
     const start = h.startAt
     const end = h.endAt ?? h.startAt
     const last = legs[legs.length - 1]
