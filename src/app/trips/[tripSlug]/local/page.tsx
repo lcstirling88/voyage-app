@@ -6,10 +6,10 @@ import { requireTripAccess } from '@/lib/session'
 import { CurrencyConverterClient, type ConversionTarget } from '@/components/CurrencyConverterClient'
 import { GenerateLocalInfoClient } from '@/components/GenerateLocalInfoClient'
 import { GenerateVisaInfoClient } from '@/components/GenerateVisaInfoClient'
-import { safeParseLocalInfo } from '@/lib/local-info'
+import { safeParseLocalInfoSet, type LocalInfo } from '@/lib/local-info'
 import { safeParseVisaInfo, visaStatusDisplay } from '@/lib/visa'
 import {
-  profileForDestination, convertCurrency, currencySymbol,
+  profileForDestination, profileForIsoNumeric, convertCurrency, currencySymbol,
   currencyDecimals, currencyQuickAmounts,
 } from '@/lib/destinations'
 import { getTripSegments, activeSegment, isMultiCountry } from '@/lib/segments'
@@ -20,7 +20,7 @@ export default async function LocalPage({ params }: { params: Promise<{ tripSlug
   const trip = await prisma.trip.findUnique({ where: { slug: tripSlug } })
   if (!trip) notFound()
 
-  const info = safeParseLocalInfo(trip.localInfoJson)
+  const localSet = safeParseLocalInfoSet(trip.localInfoJson)
 
   // Visa / entry: generated for the user's passport (nationality → home fallback).
   const dbUser = await prisma.user.findUnique({
@@ -35,6 +35,10 @@ export default async function LocalPage({ params }: { params: Promise<{ tripSlug
   const segments = await getTripSegments(trip)
   const activeLeg = activeSegment(segments)
   const multiCountry = isMultiCountry(segments)
+  // Local-info for the active leg's country drives the currency rule-of-thumb.
+  const activeCountryInfo =
+    localSet?.countries.find((c) => c.country === activeLeg?.country)?.info
+    ?? localSet?.countries[0]?.info ?? null
   const localCurrency = activeLeg?.currency ?? trip.localCurrency ?? profileForDestination(trip.destination).currency ?? 'USD'
   const homeCurrency = trip.homeCurrency || 'AUD'
   // Build conversion targets: home first (highlighted), then up to 3 other
@@ -57,7 +61,7 @@ export default async function LocalPage({ params }: { params: Promise<{ tripSlug
             <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Local intelligence</div>
             <h1 className="h-display text-4xl sm:text-6xl mt-2">Know before you go.</h1>
           </div>
-          {info && <GenerateLocalInfoClient tripSlug={trip.slug} destination={trip.destination} regenerate />}
+          {localSet && <GenerateLocalInfoClient tripSlug={trip.slug} destination={trip.destination} regenerate />}
         </div>
       </div>
 
@@ -149,126 +153,145 @@ export default async function LocalPage({ params }: { params: Promise<{ tripSlug
             quickAmounts={currencyQuickAmounts(localCurrency)}
             conversions={conversions}
           />
-          {info?.ruleOfThumbCurrency && (
+          {activeCountryInfo?.ruleOfThumbCurrency && (
             <div className="mt-5 pt-5 border-t border-line text-xs text-ink-muted">
-              <span className="font-medium text-ink">Rule of thumb:</span> {info.ruleOfThumbCurrency}
+              <span className="font-medium text-ink">Rule of thumb:</span> {activeCountryInfo.ruleOfThumbCurrency}
             </div>
           )}
         </div>
 
-        {!info && (
+        {!localSet ? (
           <GenerateLocalInfoClient tripSlug={trip.slug} destination={trip.destination} />
-        )}
-
-        {info && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {/* Tipping */}
-            <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
-              <div className="w-10 h-10 rounded-full bg-sakura-soft grid place-items-center mb-3">
-                <HandCoins className="w-5 h-5 text-wine" />
-              </div>
-              <h3 className="font-display text-xl">Tipping</h3>
-              <p className="text-sm text-ink-muted mt-1">{info.tipping.summary}</p>
-              <ul className="text-sm mt-4 space-y-2">
-                {info.tipping.rules.map((r, i) => (
-                  <li key={i} className="flex gap-2"><span className="text-ink-muted">·</span>{r}</li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Power */}
-            <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
-              <div className="w-10 h-10 rounded-full bg-gold-soft grid place-items-center mb-3">
-                <Plug className="w-5 h-5 text-gold" />
-              </div>
-              <h3 className="font-display text-xl">Power</h3>
-              <p className="text-sm text-ink-muted mt-1">{info.power.type} · {info.power.voltage} · {info.power.frequency}</p>
-              <ul className="text-sm mt-4 space-y-2">
-                {info.power.notes.map((n, i) => (
-                  <li key={i} className="flex gap-2"><span className="text-ink-muted">·</span>{n}</li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Cash vs Card */}
-            <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
-              <div className="w-10 h-10 rounded-full bg-sage-soft grid place-items-center mb-3">
-                <Banknote className="w-5 h-5 text-sage" />
-              </div>
-              <h3 className="font-display text-xl">Cash vs card</h3>
-              <p className="text-sm text-ink-muted mt-1">{info.cashVsCard.summary}</p>
-              <ul className="text-sm mt-4 space-y-2">
-                {info.cashVsCard.notes.map((n, i) => (
-                  <li key={i} className="flex gap-2"><span className="text-ink-muted">·</span>{n}</li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Connectivity */}
-            <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
-              <div className="w-10 h-10 rounded-full bg-sakura-soft grid place-items-center mb-3">
-                <Wifi className="w-5 h-5 text-wine" />
-              </div>
-              <h3 className="font-display text-xl">Connectivity</h3>
-              <p className="text-sm text-ink-muted mt-1">{info.connectivity.summary}</p>
-              <ul className="text-sm mt-4 space-y-2">
-                {info.connectivity.notes.map((n, i) => (
-                  <li key={i} className="flex gap-2"><span className="text-ink-muted">·</span>{n}</li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Phrases */}
-            <div className="sm:col-span-2 border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
-              <h3 className="font-display text-2xl mb-4">Useful phrases</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
-                {info.phrases.map((p, i) => (
-                  <div key={i} className="flex justify-between items-baseline border-b border-line-soft pb-2">
-                    <span className="text-ink-muted italic">{p.phrase}</span>
-                    <span className="text-right">{p.translation}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Don't do this */}
-            <div className="border border-line rounded-xl bg-ink text-paper-pure p-5 sm:p-6 relative overflow-hidden">
-              <div className="absolute -right-10 -bottom-10 w-40 h-40 rounded-full bg-sakura/20" />
-              <div className="w-10 h-10 rounded-full bg-paper-pure/10 grid place-items-center mb-3">
-                <AlertOctagon className="w-5 h-5 text-sakura" />
-              </div>
-              <h3 className="font-display text-xl">Don&apos;t do this</h3>
-              <ul className="text-sm mt-4 space-y-2.5 text-paper-pure/80">
-                {info.dontDoThis.map((d, i) => (
-                  <li key={i}>· {d}</li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Emergency */}
-            <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
-              <div className="w-10 h-10 rounded-full bg-sakura-soft grid place-items-center mb-3">
-                <LifeBuoy className="w-5 h-5 text-wine" />
-              </div>
-              <h3 className="font-display text-xl">In an emergency</h3>
-              <ul className="text-sm mt-4 space-y-2">
-                {info.emergencyNumbers.map((e, i) => (
-                  <li key={i} className="flex justify-between gap-3">
-                    <span className="text-ink-muted truncate">{e.label}</span>
-                    <span className="num-mono font-medium shrink-0">{e.number}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+        ) : localSet.countries.length === 1 ? (
+          <LocalInfoGrid info={localSet.countries[0].info} />
+        ) : (
+          <div className="space-y-10 sm:space-y-12">
+            {localSet.countries.map((c) => {
+              const flag = c.isoNumeric ? profileForIsoNumeric(c.isoNumeric)?.passportIcon : null
+              return (
+                <section key={c.country}>
+                  <h2 className="font-display text-2xl sm:text-3xl mb-4 flex items-center gap-2 border-b border-line pb-3">
+                    <span aria-hidden>{flag ?? '🌍'}</span> {c.country}
+                  </h2>
+                  <LocalInfoGrid info={c.info} />
+                </section>
+              )
+            })}
           </div>
         )}
 
-        {info && (
+        {localSet && (
           <p className="text-[10px] text-ink-muted mt-6 text-center italic">
-            Local info generated by AI on {new Date(info.generatedAt).toLocaleDateString()}. Double-check critical details (emergency numbers, embassy contacts) before you rely on them.
+            Local info generated by AI{localSet.generatedAt ? ` on ${new Date(localSet.generatedAt).toLocaleDateString()}` : ''}. Double-check critical details (emergency numbers, embassy contacts) before you rely on them.
           </p>
         )}
       </div>
     </>
+  )
+}
+
+/** The card grid for one country's local info — tipping, power, cash, etc. */
+function LocalInfoGrid({ info }: { info: LocalInfo }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+      {/* Tipping */}
+      <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
+        <div className="w-10 h-10 rounded-full bg-sakura-soft grid place-items-center mb-3">
+          <HandCoins className="w-5 h-5 text-wine" />
+        </div>
+        <h3 className="font-display text-xl">Tipping</h3>
+        <p className="text-sm text-ink-muted mt-1">{info.tipping.summary}</p>
+        <ul className="text-sm mt-4 space-y-2">
+          {info.tipping.rules.map((r, i) => (
+            <li key={i} className="flex gap-2"><span className="text-ink-muted">·</span>{r}</li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Power */}
+      <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
+        <div className="w-10 h-10 rounded-full bg-gold-soft grid place-items-center mb-3">
+          <Plug className="w-5 h-5 text-gold" />
+        </div>
+        <h3 className="font-display text-xl">Power</h3>
+        <p className="text-sm text-ink-muted mt-1">{info.power.type} · {info.power.voltage} · {info.power.frequency}</p>
+        <ul className="text-sm mt-4 space-y-2">
+          {info.power.notes.map((n, i) => (
+            <li key={i} className="flex gap-2"><span className="text-ink-muted">·</span>{n}</li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Cash vs Card */}
+      <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
+        <div className="w-10 h-10 rounded-full bg-sage-soft grid place-items-center mb-3">
+          <Banknote className="w-5 h-5 text-sage" />
+        </div>
+        <h3 className="font-display text-xl">Cash vs card</h3>
+        <p className="text-sm text-ink-muted mt-1">{info.cashVsCard.summary}</p>
+        <ul className="text-sm mt-4 space-y-2">
+          {info.cashVsCard.notes.map((n, i) => (
+            <li key={i} className="flex gap-2"><span className="text-ink-muted">·</span>{n}</li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Connectivity */}
+      <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
+        <div className="w-10 h-10 rounded-full bg-sakura-soft grid place-items-center mb-3">
+          <Wifi className="w-5 h-5 text-wine" />
+        </div>
+        <h3 className="font-display text-xl">Connectivity</h3>
+        <p className="text-sm text-ink-muted mt-1">{info.connectivity.summary}</p>
+        <ul className="text-sm mt-4 space-y-2">
+          {info.connectivity.notes.map((n, i) => (
+            <li key={i} className="flex gap-2"><span className="text-ink-muted">·</span>{n}</li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Phrases */}
+      <div className="sm:col-span-2 border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
+        <h3 className="font-display text-2xl mb-4">Useful phrases</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+          {info.phrases.map((p, i) => (
+            <div key={i} className="flex justify-between items-baseline border-b border-line-soft pb-2">
+              <span className="text-ink-muted italic">{p.phrase}</span>
+              <span className="text-right">{p.translation}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Don't do this */}
+      <div className="border border-line rounded-xl bg-ink text-paper-pure p-5 sm:p-6 relative overflow-hidden">
+        <div className="absolute -right-10 -bottom-10 w-40 h-40 rounded-full bg-sakura/20" />
+        <div className="w-10 h-10 rounded-full bg-paper-pure/10 grid place-items-center mb-3">
+          <AlertOctagon className="w-5 h-5 text-sakura" />
+        </div>
+        <h3 className="font-display text-xl">Don&apos;t do this</h3>
+        <ul className="text-sm mt-4 space-y-2.5 text-paper-pure/80">
+          {info.dontDoThis.map((d, i) => (
+            <li key={i}>· {d}</li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Emergency */}
+      <div className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
+        <div className="w-10 h-10 rounded-full bg-sakura-soft grid place-items-center mb-3">
+          <LifeBuoy className="w-5 h-5 text-wine" />
+        </div>
+        <h3 className="font-display text-xl">In an emergency</h3>
+        <ul className="text-sm mt-4 space-y-2">
+          {info.emergencyNumbers.map((e, i) => (
+            <li key={i} className="flex justify-between gap-3">
+              <span className="text-ink-muted truncate">{e.label}</span>
+              <span className="num-mono font-medium shrink-0">{e.number}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   )
 }

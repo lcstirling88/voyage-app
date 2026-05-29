@@ -178,8 +178,45 @@ export async function generateLocalInfo(formData: FormData): Promise<GenerateLoc
 
   const { trip } = await requireTripAccess(tripSlug)
 
+  // One local-info section per distinct country leg (multi-country aware).
+  const segments = await getTripSegments(trip)
+  const distinct: { country: string; iso: string | null }[] = []
+  const seen = new Set<string>()
+  for (const s of segments) {
+    if (seen.has(s.country)) continue
+    seen.add(s.country)
+    distinct.push({ country: s.country, iso: s.isoNumeric })
+  }
+  if (distinct.length === 0) distinct.push({ country: trip.destination, iso: null })
+
   try {
-    const response = await anthropic.messages.create({
+    const results = await Promise.all(
+      distinct.map(async (d) => ({ d, input: await requestCountryLocalInfo(anthropic, d.country, trip) })),
+    )
+    const countries = results
+      .filter((r) => r.input)
+      .map((r) => ({ country: r.d.country, isoNumeric: r.d.iso, info: { destination: r.d.country, ...r.input } }))
+    if (countries.length === 0) return { ok: false, error: 'AI did not return local info.' }
+
+    await prisma.trip.update({
+      where: { id: trip.id },
+      data: { localInfoJson: JSON.stringify({ generatedAt: new Date().toISOString(), countries }) },
+    })
+    revalidatePath(`/trips/${tripSlug}/local`)
+    return { ok: true }
+  } catch (err) {
+    console.error('[generateLocalInfo]', err)
+    return { ok: false, error: 'AI request failed. Try again.' }
+  }
+}
+
+/** One Claude call producing the local-info blob for a single country. */
+async function requestCountryLocalInfo(
+  anthropic: NonNullable<ReturnType<typeof getAnthropic>>,
+  country: string,
+  trip: { homeCurrency: string; startDate: Date; endDate: Date; adultCount: number; childCount: number; childrenAges: string | null },
+): Promise<Record<string, unknown> | null> {
+  const response = await anthropic.messages.create({
       model: PARSER_MODEL,
       max_tokens: 4096,
       system:
@@ -267,37 +304,17 @@ export async function generateLocalInfo(formData: FormData): Promise<GenerateLoc
       messages: [{
         role: 'user',
         content:
-          `Generate local info for a traveler going to: ${trip.destination}\n` +
-          `Home country (for currency / embassy references): ${trip.homeCurrency} (Australia by default)\n` +
+          `Generate local info for a traveler going to: ${country}\n` +
+          `Home country (for currency / embassy references): ${trip.homeCurrency}\n` +
           `Trip dates: ${trip.startDate.toISOString().slice(0,10)} to ${trip.endDate.toISOString().slice(0,10)}\n` +
           `Travellers: ${trip.adultCount} adult(s), ${trip.childCount} child(ren)${trip.childrenAges ? ` aged ${trip.childrenAges}` : ''}\n` +
           `Please tailor where relevant (e.g. family-friendly notes if children, embassy of home country, etc.).`,
       }],
     })
 
-    const toolUse = response.content.find((c) => c.type === 'tool_use')
-    if (!toolUse || toolUse.type !== 'tool_use') {
-      return { ok: false, error: 'AI did not return local info.' }
-    }
-    const input = toolUse.input as Record<string, unknown>
-
-    const localInfo = {
-      generatedAt: new Date().toISOString(),
-      destination: trip.destination,
-      ...input,
-    }
-
-    await prisma.trip.update({
-      where: { id: trip.id },
-      data: { localInfoJson: JSON.stringify(localInfo) },
-    })
-
-    revalidatePath(`/trips/${tripSlug}/local`)
-    return { ok: true }
-  } catch (err) {
-    console.error('[generateLocalInfo]', err)
-    return { ok: false, error: 'AI request failed. Try again.' }
-  }
+  const toolUse = response.content.find((c) => c.type === 'tool_use')
+  if (!toolUse || toolUse.type !== 'tool_use') return null
+  return toolUse.input as Record<string, unknown>
 }
 
 // ----- AI visa / entry requirements -------------------------------------------------
