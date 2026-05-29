@@ -43,8 +43,8 @@ export default async function WelcomePage() {
         <circle cx="1140" cy="220" r="5" fill={ROUTE_CORAL} opacity="0.4" />
       </svg>
 
-      {/* Top navigation. Left: section links the user asked for. Right: auth state. */}
-      <header className="relative z-10 flex items-center justify-between px-5 sm:px-10 py-5 sm:py-6">
+      {/* Top navigation — just the two section links. */}
+      <header className="relative z-10 flex items-center px-5 sm:px-10 py-5 sm:py-6">
         <nav className="flex items-center gap-4 sm:gap-6 text-[11px] sm:text-xs uppercase tracking-[0.22em] text-ink-muted">
           <Link href="/profile" className="hover:text-ink transition inline-flex items-center gap-1.5">
             <UserIcon className="w-3 h-3" />
@@ -55,13 +55,6 @@ export default async function WelcomePage() {
             <span>Travel inspiration</span>
           </Link>
         </nav>
-        <div className="text-[11px] sm:text-xs uppercase tracking-[0.22em] text-ink-muted">
-          {isAuthed ? (
-            <Link href="/trips" className="hover:text-ink transition">My trips</Link>
-          ) : (
-            <Link href="/signin" className="hover:text-ink transition">Sign in</Link>
-          )}
-        </div>
       </header>
 
       {/* Hero — centred mark + tagline */}
@@ -72,13 +65,13 @@ export default async function WelcomePage() {
           The art of the journey
         </p>
 
-        <h1 className="font-display text-3xl sm:text-5xl mt-8 sm:mt-10 max-w-2xl leading-tight tracking-tight">
+        <h1 className="font-display text-xl sm:text-2xl md:text-3xl mt-7 sm:mt-9 max-w-xl leading-snug tracking-tight text-ink-soft">
           Every flight, hotel, and reservation,
           <br className="hidden sm:block" />
           gathered into one considered itinerary.
         </h1>
 
-        <p className="text-ink-muted mt-5 sm:mt-6 max-w-xl text-sm sm:text-base leading-relaxed">
+        <p className="text-ink-muted mt-4 sm:mt-5 max-w-lg text-sm leading-relaxed">
           Forward your booking emails. Itinera files them, builds your day-by-day,
           and keeps every passport stamp on a quiet, beautiful atlas of your travels.
         </p>
