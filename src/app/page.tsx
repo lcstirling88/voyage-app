@@ -8,17 +8,13 @@
  */
 
 import Link from 'next/link'
-import { ArrowRight, User as UserIcon, Compass } from 'lucide-react'
-import { auth } from '@/lib/auth'
+import { User as UserIcon, Compass } from 'lucide-react'
 import { ItineraBrand } from '@/components/ItineraBrand'
 
 const ROUTE_BLUE = '#0B6FB8'   // Spanish Blue — decorative route line
 const ROUTE_CORAL = '#F08080'  // Light Coral — origin/destination dots
 
-export default async function WelcomePage() {
-  const session = await auth()
-  const isAuthed = !!session?.user
-
+export default function WelcomePage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-paper-pure">
       {/* Decorative dotted-route SVG in the background — very faint terracotta,
@@ -75,22 +71,6 @@ export default async function WelcomePage() {
           Forward your booking emails. Itinera files them, builds your day-by-day,
           and keeps every passport stamp on a quiet, beautiful atlas of your travels.
         </p>
-
-        <div className="mt-9 sm:mt-12 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
-          <Link
-            href={isAuthed ? '/trips' : '/signin'}
-            className="inline-flex items-center justify-center gap-2 text-sm font-medium px-6 py-3 rounded-md bg-sage text-paper-pure hover:opacity-90 transition shadow-soft"
-          >
-            {isAuthed ? 'Continue to your trips' : 'Begin your atlas'}
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-          <Link
-            href="/inspiration"
-            className="text-sm text-ink-muted hover:text-ink ulink transition"
-          >
-            Browse inspiration first
-          </Link>
-        </div>
       </section>
 
       <footer className="relative z-10 px-6 sm:px-10 py-5 text-center text-[10px] uppercase tracking-[0.24em] text-ink-muted/60">
