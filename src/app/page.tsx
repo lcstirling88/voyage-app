@@ -8,7 +8,7 @@
  */
 
 import Link from 'next/link'
-import { User as UserIcon, Compass } from 'lucide-react'
+import { User as UserIcon, Compass, Sparkles } from 'lucide-react'
 import { ItineraBrand } from '@/components/ItineraBrand'
 
 const ROUTE_BLUE = '#0B6FB8'   // Spanish Blue — decorative route line
@@ -60,9 +60,9 @@ export default function WelcomePage() {
         ))}
       </svg>
 
-      {/* Top navigation — just the two section links. */}
+      {/* Top navigation — stacked section links. */}
       <header className="relative z-10 flex items-center px-5 sm:px-10 py-5 sm:py-6">
-        <nav className="flex items-center gap-4 sm:gap-6 text-[11px] sm:text-xs uppercase tracking-[0.22em] text-ink-muted">
+        <nav className="flex flex-col items-start gap-2.5 text-[11px] sm:text-xs uppercase tracking-[0.22em] text-ink-muted">
           <Link href="/profile" className="hover:text-ink transition inline-flex items-center gap-1.5">
             <UserIcon className="w-3 h-3" />
             <span>My profile</span>
@@ -70,6 +70,10 @@ export default function WelcomePage() {
           <Link href="/inspiration" className="hover:text-ink transition inline-flex items-center gap-1.5">
             <Compass className="w-3 h-3" />
             <span>Travel inspiration</span>
+          </Link>
+          <Link href="/how-it-works" className="hover:text-ink transition inline-flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3" />
+            <span>How it works</span>
           </Link>
         </nav>
       </header>
