@@ -1,14 +1,15 @@
 /**
- * Two-step header for the planner: 1 Route → 2 Days. Server component (just
- * links + styling). The current step is emphasised; the other is navigable so
- * the traveller can move back and forth between shaping the route and filling
- * the days.
+ * Three-step header for the planner: 1 Route → 2 Interests → 3 Picks. Server
+ * component (just links + styling). The current step is emphasised; the others
+ * are navigable so the traveller can move back and forth. (Jumping straight to
+ * Picks without choosing interests bounces back to Step 2, which has no themes
+ * to work from.)
  */
 
 import Link from 'next/link'
-import { MapPin, Sparkles } from 'lucide-react'
+import { MapPin, Heart, Images } from 'lucide-react'
 
-type Step = 'route' | 'days'
+type Step = 'route' | 'interests' | 'picks'
 
 function Pill({
   n, label, icon: Icon, active, href,
@@ -43,10 +44,12 @@ function Pill({
 
 export function PlanSteps({ tripSlug, current }: { tripSlug: string; current: Step }) {
   return (
-    <div className="flex items-center gap-2.5">
+    <div className="flex items-center gap-2.5 flex-wrap">
       <Pill n={1} label="Route" icon={MapPin} active={current === 'route'} href={`/trips/${tripSlug}/plan`} />
       <span className="h-px w-5 bg-line" />
-      <Pill n={2} label="Days" icon={Sparkles} active={current === 'days'} href={`/trips/${tripSlug}/plan/days`} />
+      <Pill n={2} label="Interests" icon={Heart} active={current === 'interests'} href={`/trips/${tripSlug}/plan/days`} />
+      <span className="h-px w-5 bg-line" />
+      <Pill n={3} label="Picks" icon={Images} active={current === 'picks'} href={`/trips/${tripSlug}/plan/picks`} />
     </div>
   )
 }

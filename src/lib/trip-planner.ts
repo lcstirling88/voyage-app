@@ -1,135 +1,193 @@
 /**
- * Trip planner — AI-generated preference options for "Let Itinera plan it".
+ * Trip planner helpers for "Let Itinera plan it".
  *
- * generatePlanOptions(destination, cities) returns destination-specific
- * categories of taggable things to do (theme parks, museums, food, quirky,
- * day trips…), each with NAMED options. Cached per destination so the model
- * isn't re-called on every visit. The day-by-day plan generation itself lives
- * in actions.ts (generateTripPlan) because it writes bookings.
+ * The planner is a three-step flow:
+ *   1. Route        (cities + nights — generateRoute, below)
+ *   2. Interests    (generic INTEREST_THEMES + budget + pace — a static list,
+ *                    no model call, since the themes are universal)
+ *   3. Specific picks (generateLocationPicks — per-city, top-rated NAMED
+ *                    attractions under the chosen themes, each carrying an
+ *                    imageQuery the page turns into a Wikipedia photo)
+ *
+ * The day-by-day plan generation itself lives in actions.ts (generateTripPlan)
+ * because it writes bookings; it consumes the picks the traveller selects here.
  */
 
 import { unstable_cache } from 'next/cache'
 import { getAnthropic, PARSER_MODEL } from './anthropic'
 import type { RouteStop } from './skeleton'
 
-export type PlanOption = { id: string; label: string }
-export type PlanCategory = { key: string; label: string; options: PlanOption[] }
+const slugify = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48)
 
-// Generic fallback if the model is unavailable — still useful, just not
-// destination-specific.
-const FALLBACK_CATEGORIES: PlanCategory[] = [
-  { key: 'sights', label: 'Sights & landmarks', options: [
-    { id: 'icons', label: 'The famous icons' },
-    { id: 'viewpoints', label: 'Viewpoints & skylines' },
-    { id: 'old-town', label: 'Old town & historic streets' },
-    { id: 'architecture', label: 'Notable architecture' },
-  ] },
-  { key: 'culture', label: 'Museums & culture', options: [
-    { id: 'art', label: 'Art museums' },
-    { id: 'history', label: 'History & heritage' },
-    { id: 'galleries', label: 'Galleries & design' },
-  ] },
-  { key: 'food', label: 'Food & dining', options: [
-    { id: 'street-food', label: 'Street food & markets' },
-    { id: 'local-classics', label: 'Local classic dishes' },
-    { id: 'special-dinner', label: 'A special dinner out' },
-    { id: 'cafes', label: 'Cafés & coffee' },
-  ] },
-  { key: 'outdoors', label: 'Outdoors & nature', options: [
-    { id: 'parks', label: 'Parks & gardens' },
-    { id: 'walks', label: 'Walks & hikes' },
-    { id: 'water', label: 'Beaches & water' },
-  ] },
-  { key: 'quirky', label: 'Quirky & local', options: [
-    { id: 'hidden-gems', label: 'Hidden gems' },
-    { id: 'shopping', label: 'Shopping & boutiques' },
-    { id: 'nightlife', label: 'Bars & nightlife' },
-  ] },
-  { key: 'daytrips', label: 'Day trips', options: [
-    { id: 'nearby', label: 'Easy day trips nearby' },
-  ] },
+// ----- Step 2: generic interest themes ----------------------------------------------
+
+/**
+ * A broad interest theme shown in Step 2. These are deliberately universal
+ * (not destination-specific), so no model call is needed to list them. Each
+ * carries an `icon` key (mapped to a lucide icon in components/theme-icons) and
+ * a `hint` that steers the Step-3 picks model toward the right kind of place.
+ */
+export type InterestTheme = { id: string; label: string; icon: string; hint: string }
+
+export const INTEREST_THEMES: InterestTheme[] = [
+  { id: 'outdoors',  label: 'Outdoor activities',  icon: 'mountain',     hint: 'hikes, nature, scenic walks, adventure sports, water activities, viewpoints' },
+  { id: 'landmarks', label: 'Iconic sights',        icon: 'landmark',     hint: 'famous landmarks, monuments, must-see icons, notable architecture' },
+  { id: 'museums',   label: 'Museums & galleries',  icon: 'building-2',   hint: 'art museums, history museums, galleries, exhibitions' },
+  { id: 'culture',   label: 'Culture & heritage',   icon: 'drama',        hint: 'temples, shrines, historic quarters, local traditions and heritage' },
+  { id: 'food',      label: 'Food & drink',         icon: 'utensils',     hint: 'signature restaurants, street food, food markets, cafés, tastings' },
+  { id: 'nightlife', label: 'Nightlife',            icon: 'martini',      hint: 'bars, clubs, rooftops, lively evening districts' },
+  { id: 'shows',     label: 'Live shows',           icon: 'ticket',       hint: 'theatre, concerts, live music, performances, sport events' },
+  { id: 'animals',   label: 'Animal experiences',   icon: 'paw-print',    hint: 'zoos, aquariums, wildlife encounters, sanctuaries, safaris' },
+  { id: 'shopping',  label: 'Shopping',             icon: 'shopping-bag', hint: 'shopping districts, boutiques, markets, department stores' },
+  { id: 'wellness',  label: 'Wellness & relaxing',  icon: 'flower-2',     hint: 'spas, onsen, hot springs, beaches, gardens, relaxation' },
+  { id: 'family',    label: 'Family & kids',        icon: 'baby',         hint: 'theme parks, kid-friendly attractions, hands-on family fun' },
+  { id: 'daytrips',  label: 'Day trips',            icon: 'route',        hint: 'easy half- and full-day excursions near the city' },
 ]
 
-async function generateUncached(destination: string, cities: string): Promise<PlanCategory[]> {
+// ----- Step 3: per-location specific picks ------------------------------------------
+
+export type LocationPick = {
+  id: string
+  name: string         // specific, real, named place / experience
+  blurb: string        // one short line: what it is / why go
+  theme: string        // INTEREST_THEMES id this belongs to
+  imageQuery: string   // a precise search term for a Wikipedia photo
+  image?: string | null
+}
+export type CityPicks = { city: string; picks: LocationPick[] }
+
+async function generatePicksUncached(
+  destination: string,
+  cities: string[],
+  themeIds: string[],
+): Promise<CityPicks[]> {
   const anthropic = getAnthropic()
-  if (!anthropic) return FALLBACK_CATEGORIES
+  const themes = INTEREST_THEMES.filter((t) => themeIds.includes(t.id))
+  if (!anthropic || cities.length === 0 || themes.length === 0) return []
+
+  const themeLines = themes.map((t) => `  - ${t.id}: ${t.label} (${t.hint})`).join('\n')
+  const allowed = new Set(themes.map((t) => t.id))
+
   try {
     const response = await anthropic.messages.create({
       model: PARSER_MODEL,
-      max_tokens: 2048,
+      max_tokens: 6144,
       system:
-        `You are an expert local travel concierge. For the given destination, produce a set of categories ` +
-        `of things a traveller might want to do, each with SPECIFIC, NAMED options real to that place ` +
-        `(actual attractions, experiences, neighbourhoods, signature dishes, day trips — never generic ` +
-        `labels like "a museum"). Return 5-7 categories, each with 4-8 options. Keep option labels short ` +
-        `(2-5 words). Include a mix: signature attractions, museums/culture, food & dining, quirky/local ` +
-        `experiences, outdoors, and short local day trips. Tailor everything to the SPECIFIC cities/areas ` +
-        `named in the user message — every option must be in one of those cities; never include ` +
-        `attractions from any other city.`,
+        `You are an expert local travel concierge. For each city given, list the most popular, ` +
+        `highest-rated, MUST-DO real attractions and experiences — the ones most acclaimed by travellers — ` +
+        `that fall under the traveller's chosen interest themes. RULES:\n` +
+        `- Only REAL, specific, NAMED places/experiences that actually exist in that city. Never generic ` +
+        `("a museum", "a nice restaurant").\n` +
+        `- Order each city's picks best-first (most acclaimed / iconic first).\n` +
+        `- Up to 5 picks per theme per city, and at most 12 picks per city in total. Quality over quantity.\n` +
+        `- Tag every pick with EXACTLY ONE of the provided theme ids.\n` +
+        `- Only use the themes provided; if a theme has nothing strong in a city, skip it for that city.\n` +
+        `- imageQuery: the best search term to find a PHOTO of this exact place on Wikipedia — usually its ` +
+        `proper name plus the city (e.g. "Senso-ji Temple Tokyo", "Sydney Opera House").\n` +
+        `- blurb: ONE short sentence on what it is / why it's worth it.`,
       tools: [{
-        name: 'save_plan_options',
-        description: 'Destination-specific categories of taggable things to do.',
+        name: 'save_picks',
+        description: 'Per-city lists of top-rated attractions under the chosen themes.',
         input_schema: {
           type: 'object' as const,
           properties: {
-            categories: {
+            cities: {
               type: 'array' as const,
-              minItems: 4,
-              maxItems: 7,
               items: {
                 type: 'object' as const,
                 properties: {
-                  key: { type: 'string' as const, description: 'short slug, e.g. "theme-parks"' },
-                  label: { type: 'string' as const, description: 'category heading' },
-                  options: {
+                  city: { type: 'string' as const, description: 'one of the cities given' },
+                  picks: {
                     type: 'array' as const,
-                    minItems: 3,
-                    maxItems: 8,
+                    maxItems: 12,
                     items: {
                       type: 'object' as const,
                       properties: {
-                        id: { type: 'string' as const, description: 'short slug, unique within category' },
-                        label: { type: 'string' as const, description: 'specific named option' },
+                        name: { type: 'string' as const, description: 'specific named place / experience' },
+                        blurb: { type: 'string' as const, description: 'one short sentence' },
+                        theme: { type: 'string' as const, description: 'one of the provided theme ids' },
+                        imageQuery: { type: 'string' as const, description: 'search term for a Wikipedia photo' },
                       },
-                      required: ['id', 'label'],
+                      required: ['name', 'blurb', 'theme', 'imageQuery'],
                     },
                   },
                 },
-                required: ['key', 'label', 'options'],
+                required: ['city', 'picks'],
               },
             },
           },
-          required: ['categories'],
+          required: ['cities'],
         },
       }],
-      tool_choice: { type: 'tool', name: 'save_plan_options' },
+      tool_choice: { type: 'tool', name: 'save_picks' },
       messages: [{
         role: 'user',
-        content: `Destination: ${destination}\nCities / areas on this trip: ${cities || destination}`,
+        content:
+          `Destination: ${destination}\n` +
+          `Cities to cover (use ONLY these, never any other city): ${cities.join(', ')}\n` +
+          `Chosen interest themes:\n${themeLines}\n\n` +
+          `List the top picks per city now, best-first.`,
       }],
     })
+
     const toolUse = response.content.find((c) => c.type === 'tool_use')
     if (toolUse && toolUse.type === 'tool_use') {
-      const out = toolUse.input as { categories?: PlanCategory[] }
-      if (out.categories && out.categories.length) return out.categories
+      const out = toolUse.input as {
+        cities?: Array<{ city?: string; picks?: Array<Partial<LocationPick>> }>
+      }
+      const result: CityPicks[] = []
+      const seen = new Set<string>()
+      for (const c of out.cities ?? []) {
+        const city = String(c.city ?? '').trim()
+        if (!city) continue
+        const picks: LocationPick[] = []
+        for (const p of c.picks ?? []) {
+          const name = String(p.name ?? '').trim()
+          if (!name) continue
+          const theme = allowed.has(String(p.theme)) ? String(p.theme) : themes[0].id
+          let id = `${slugify(city)}-${slugify(name)}`
+          while (seen.has(id)) id = `${id}-x`
+          seen.add(id)
+          picks.push({
+            id,
+            name,
+            blurb: String(p.blurb ?? '').trim(),
+            theme,
+            imageQuery: String(p.imageQuery ?? `${name} ${city}`).trim(),
+          })
+        }
+        if (picks.length) result.push({ city, picks })
+      }
+      if (result.length) return result
     }
   } catch (err) {
-    console.error('[generatePlanOptions] error:', err)
+    console.error('[generateLocationPicks] error:', err)
   }
-  return FALLBACK_CATEGORIES
+  return []
 }
 
-/** Destination-specific preference categories, cached ~30 days per destination. */
-export async function generatePlanOptions(destination: string, cities: string): Promise<PlanCategory[]> {
+/**
+ * Top-rated NAMED picks per city under the chosen themes, cached ~30 days. The
+ * cache key folds in the (sorted) cities and themes so different selections
+ * don't collide but a repeat of the same selection is instant.
+ */
+export async function generateLocationPicks(
+  destination: string,
+  cities: string[],
+  themeIds: string[],
+): Promise<CityPicks[]> {
+  const cityKey = [...cities].sort().join('|')
+  const themeKey = [...themeIds].sort().join(',')
   const cached = unstable_cache(
-    () => generateUncached(destination, cities),
-    ['plan-options', destination, cities],
+    () => generatePicksUncached(destination, cities, themeIds),
+    ['location-picks', destination, cityKey, themeKey],
     { revalidate: 60 * 60 * 24 * 30 },
   )
   return cached()
 }
 
-// ----- Route / skeleton generation --------------------------------------------------
+// ----- Step 1: Route / skeleton generation ------------------------------------------
 
 export type GenerateRouteInput = {
   destination: string
