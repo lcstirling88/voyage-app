@@ -16,6 +16,54 @@ const categoryIcon = (cat: string) => {
 const fileIcon = (mimeType: string) =>
   (mimeType || '').toLowerCase().startsWith('image/') ? ImageIcon : FileText
 
+/**
+ * A parsed Document card (category / title / notes from the email parser).
+ * When we know which email it came from, the whole card links to that email's
+ * detail page — that's where the downloadable attachment lives (and the
+ * "re-parse with files" form), so the card is no longer a dead end.
+ */
+function DocCard({
+  doc,
+  tripSlug,
+}: {
+  doc: { id: string; category: string; title: string; notes: string | null; sourceEmailId: string | null }
+  tripSlug: string
+}) {
+  const Icon = categoryIcon(doc.category)
+  const href = doc.sourceEmailId ? `/trips/${tripSlug}/inbox/${doc.sourceEmailId}` : null
+  const inner = (
+    <>
+      <div className="aspect-[4/3] rounded-lg bg-sage-soft mb-3 grid place-items-center">
+        <Icon className="w-8 h-8 text-sage" />
+      </div>
+      <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">{doc.category}</div>
+      <div className="font-display text-lg leading-tight mt-1">{doc.title}</div>
+      {doc.notes && <div className="text-xs text-ink-muted mt-1 num-mono">{doc.notes}</div>}
+      {href && (
+        <div className="mt-2 inline-flex items-center gap-1 text-[11px] text-sage opacity-70 group-hover:opacity-100 transition">
+          <ExternalLink className="w-3 h-3" /> View source email
+        </div>
+      )}
+    </>
+  )
+  return (
+    <div className="group border border-line rounded-xl bg-paper-pure p-5 hover:border-sage hover:shadow-soft transition relative">
+      {/* Delete button is a sibling of the link (not nested inside the anchor) and
+          sits above it so its click is never swallowed by the card link. */}
+      <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition">
+        <InlineDeleteButton kind="document" id={doc.id} tripSlug={tripSlug} />
+      </div>
+      {href ? (
+        <a href={href} className="block">
+          {inner}
+        </a>
+      ) : (
+        inner
+      )}
+    </div>
+  )
+}
+
 export default async function DocumentsPage({ params }: { params: Promise<{ tripSlug: string }> }) {
   const { tripSlug } = await params
   // Defence-in-depth: this page renders Blob URLs for passports / e-tickets, so
@@ -94,22 +142,9 @@ export default async function DocumentsPage({ params }: { params: Promise<{ trip
             <span className="text-xs text-ink-muted">{travelDocs.length} items</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {travelDocs.map((d) => {
-              const Icon = categoryIcon(d.category)
-              return (
-                <div key={d.id} className="group border border-line rounded-xl bg-paper-pure p-5 hover:shadow-soft transition relative">
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition">
-                    <InlineDeleteButton kind="document" id={d.id} tripSlug={trip.slug} />
-                  </div>
-                  <div className="aspect-[4/3] rounded-lg bg-sage-soft mb-3 grid place-items-center">
-                    <Icon className="w-8 h-8 text-sage" />
-                  </div>
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">{d.category}</div>
-                  <div className="font-display text-lg leading-tight mt-1">{d.title}</div>
-                  {d.notes && <div className="text-xs text-ink-muted mt-1 num-mono">{d.notes}</div>}
-                </div>
-              )
-            })}
+            {travelDocs.map((d) => (
+              <DocCard key={d.id} doc={d} tripSlug={trip.slug} />
+            ))}
             <button className="border-2 border-dashed border-line rounded-xl bg-paper/40 p-5 hover:bg-paper-pure transition grid place-items-center min-h-[220px]">
               <div className="text-center text-ink-muted">
                 <Upload className="w-6 h-6 mx-auto mb-2" />
@@ -125,22 +160,9 @@ export default async function DocumentsPage({ params }: { params: Promise<{ trip
             <span className="text-xs text-ink-muted">{bookingDocs.length} items</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {bookingDocs.map((d) => {
-              const Icon = categoryIcon(d.category)
-              return (
-                <div key={d.id} className="group border border-line rounded-xl bg-paper-pure p-5 hover:shadow-soft transition relative">
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition">
-                    <InlineDeleteButton kind="document" id={d.id} tripSlug={trip.slug} />
-                  </div>
-                  <div className="aspect-[4/3] rounded-lg bg-sage-soft mb-3 grid place-items-center">
-                    <Icon className="w-8 h-8 text-sage" />
-                  </div>
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">{d.category}</div>
-                  <div className="font-display text-lg leading-tight mt-1">{d.title}</div>
-                  {d.notes && <div className="text-xs text-ink-muted mt-1 num-mono">{d.notes}</div>}
-                </div>
-              )
-            })}
+            {bookingDocs.map((d) => (
+              <DocCard key={d.id} doc={d} tripSlug={trip.slug} />
+            ))}
           </div>
         </section>
       </div>
