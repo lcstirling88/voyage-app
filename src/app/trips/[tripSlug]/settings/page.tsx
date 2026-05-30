@@ -40,7 +40,7 @@ export default async function TripSettingsPage({ params }: { params: Promise<{ t
     <>
       <div className="hero-light border-b border-line px-6 sm:px-10 py-8 sm:py-10">
         <div className="text-[10px] uppercase tracking-[0.22em] text-ink-muted">Trip settings</div>
-        <h1 className="h-display text-4xl sm:text-6xl mt-2">{trip.name}.</h1>
+        <h1 className="h-display text-4xl sm:text-6xl mt-2 break-words">{trip.name}.</h1>
         <p className="text-ink-muted mt-3 max-w-xl text-sm sm:text-base">Edit, invite people, or remove the trip entirely.</p>
       </div>
 

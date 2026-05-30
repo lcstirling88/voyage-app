@@ -1,92 +1,175 @@
 import { notFound } from 'next/navigation'
-import { FileText, Bed, Ticket, Upload, ExternalLink, Image as ImageIcon } from 'lucide-react'
+import { format } from 'date-fns'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
-import { InlineDeleteButton } from '@/components/InlineDeleteButton'
+import { cityForBooking } from '@/lib/itinerary'
+import { DocumentsBrowserClient, type DocItem, type DocType } from '@/components/DocumentsBrowserClient'
 
 const inboxDomain = process.env.NEXT_PUBLIC_INBOX_DOMAIN ?? 'voyage.local'
 
-const categoryIcon = (cat: string) => {
-  if (cat === 'passport' || cat === 'visa' || cat === 'insurance') return FileText
-  if (cat === 'ticket') return Ticket
-  if (cat === 'voucher') return Bed
-  return FileText
+// Booking type → document group.
+function bookingDocType(type: string): DocType {
+  switch (type) {
+    case 'flight': return 'flight'
+    case 'hotel': return 'hotel'
+    case 'car': return 'car'
+    case 'transit': return 'transit'
+    case 'activity': return 'activity'
+    case 'restaurant': return 'dining'
+    default: return 'other'
+  }
 }
 
-const fileIcon = (mimeType: string) =>
-  (mimeType || '').toLowerCase().startsWith('image/') ? ImageIcon : FileText
+// Parsed-document category → document group.
+function categoryDocType(cat: string): DocType {
+  switch (cat) {
+    case 'insurance': return 'insurance'
+    case 'visa': return 'visa'
+    case 'passport': return 'passport'
+    case 'ticket': return 'ticket'
+    case 'voucher': return 'voucher'
+    case 'flight': return 'flight'
+    case 'hotel': return 'hotel'
+    default: return 'other'
+  }
+}
 
 /**
- * A parsed Document card (category / title / notes from the email parser).
- * When we know which email it came from, the whole card links to that email's
- * detail page — that's where the downloadable attachment lives (and the
- * "re-parse with files" form), so the card is no longer a dead end.
+ * Documents tab.
+ *
+ * Builds one flat, deduplicated list from the trip's incoming emails, with a
+ * strict precedence so nothing is shown twice (issue #1):
+ *
+ *   1. Email has a downloadable attachment → show the FILE(s). The PDF is the
+ *      canonical document, so the parsed Document cards / email link for that
+ *      same email are suppressed.
+ *   2. Email has bookings but no attachment → the confirmation email itself
+ *      becomes the document, linking to its detail page (issue #3).
+ *   3. Email has only parsed documents → show those, linking to the email.
+ *
+ * Items are grouped by type and sorted by date in the browser component, with
+ * a city filter to condense the view (issue #2).
  */
-function DocCard({
-  doc,
-  tripSlug,
-}: {
-  doc: { id: string; category: string; title: string; notes: string | null; sourceEmailId: string | null }
-  tripSlug: string
-}) {
-  const Icon = categoryIcon(doc.category)
-  const href = doc.sourceEmailId ? `/trips/${tripSlug}/inbox/${doc.sourceEmailId}` : null
-  const inner = (
-    <>
-      <div className="aspect-[4/3] rounded-lg bg-sage-soft mb-3 grid place-items-center">
-        <Icon className="w-8 h-8 text-sage" />
-      </div>
-      <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted">{doc.category}</div>
-      <div className="font-display text-lg leading-tight mt-1">{doc.title}</div>
-      {doc.notes && <div className="text-xs text-ink-muted mt-1 num-mono">{doc.notes}</div>}
-      {href && (
-        <div className="mt-2 inline-flex items-center gap-1 text-[11px] text-sage opacity-70 group-hover:opacity-100 transition">
-          <ExternalLink className="w-3 h-3" /> View source email
-        </div>
-      )}
-    </>
-  )
-  return (
-    <div className="group border border-line rounded-xl bg-paper-pure p-5 hover:border-sage hover:shadow-soft transition relative">
-      {/* Delete button is a sibling of the link (not nested inside the anchor) and
-          sits above it so its click is never swallowed by the card link. */}
-      <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition">
-        <InlineDeleteButton kind="document" id={doc.id} tripSlug={tripSlug} />
-      </div>
-      {href ? (
-        <a href={href} className="block">
-          {inner}
-        </a>
-      ) : (
-        inner
-      )}
-    </div>
-  )
-}
-
 export default async function DocumentsPage({ params }: { params: Promise<{ tripSlug: string }> }) {
   const { tripSlug } = await params
-  // Defence-in-depth: this page renders Blob URLs for passports / e-tickets, so
-  // re-check trip access here rather than trusting only the layout gate.
+  // Defence-in-depth: this page links to private files, so re-check access here.
   await requireTripAccess(tripSlug)
+
   const trip = await prisma.trip.findUnique({
     where: { slug: tripSlug },
-    include: { documents: { orderBy: { createdAt: 'asc' } } },
+    select: {
+      id: true,
+      slug: true,
+      inboxToken: true,
+      documents: { select: { id: true, category: true, title: true, notes: true, sourceEmailId: true } },
+    },
   })
   if (!trip) notFound()
 
-  // The actual stored files (PDFs / images) that came in on booking emails.
-  // storagePath holds the Blob URL; only rows with a non-empty path have a
-  // real file behind them (others were 0-byte or arrived before Blob was on).
-  const files = await prisma.emailAttachment.findMany({
-    where: { email: { tripId: trip.id }, storagePath: { not: '' } },
-    include: { email: { select: { subject: true, receivedAt: true } } },
-    orderBy: { email: { receivedAt: 'desc' } },
+  const emails = await prisma.incomingEmail.findMany({
+    where: { tripId: trip.id },
+    orderBy: { receivedAt: 'desc' },
+    select: {
+      id: true,
+      subject: true,
+      attachments: {
+        // Only attachments with a real stored file behind them are downloadable.
+        where: { storagePath: { not: '' } },
+        select: { id: true, filename: true, size: true },
+        orderBy: { filename: 'asc' },
+      },
+      bookings: {
+        select: { id: true, type: true, title: true, vendor: true, startAt: true, location: true, address: true },
+        orderBy: { startAt: 'asc' },
+      },
+      documents: { select: { id: true, category: true, title: true, notes: true } },
+    },
   })
 
+  const items: DocItem[] = []
+  const handledDocIds = new Set<string>()
+
+  for (const email of emails) {
+    const files = email.attachments
+    const bookings = email.bookings
+    const docs = email.documents
+    const primary = bookings[0] ?? null
+    const emailHref = `/trips/${trip.slug}/inbox/${email.id}`
+    const city = primary ? cityForBooking(primary) : null
+    const dateMs = primary ? primary.startAt.getTime() : null
+    const dateLabel = primary ? format(primary.startAt, 'MMM d') : null
+
+    if (files.length > 0) {
+      // (1) File supersedes — emit downloadable items, suppress this email's docs.
+      const type: DocType = primary
+        ? bookingDocType(primary.type)
+        : docs[0]
+          ? categoryDocType(docs[0].category)
+          : 'other'
+      const baseTitle = primary?.title ?? docs[0]?.title ?? null
+      for (const f of files) {
+        items.push({
+          key: `att-${f.id}`,
+          type,
+          title: baseTitle ?? f.filename,
+          subtitle: `${f.filename} · ${(f.size / 1024).toFixed(0)} KB`,
+          dateMs,
+          dateLabel,
+          city,
+          fileId: f.id,
+        })
+      }
+      docs.forEach((d) => handledDocIds.add(d.id))
+    } else if (primary) {
+      // (2) No attachment — the confirmation email is the document.
+      items.push({
+        key: `email-${email.id}`,
+        type: bookingDocType(primary.type),
+        title: primary.title,
+        subtitle: primary.vendor ? `${primary.vendor} · Confirmation email` : 'Confirmation email',
+        dateMs,
+        dateLabel,
+        city,
+        href: emailHref,
+      })
+      docs.forEach((d) => handledDocIds.add(d.id))
+    } else if (docs.length > 0) {
+      // (3) Parsed metadata only — link to the email it came from.
+      for (const d of docs) {
+        items.push({
+          key: `doc-${d.id}`,
+          type: categoryDocType(d.category),
+          title: d.title,
+          subtitle: d.notes ?? `from ${email.subject}`,
+          dateMs: null,
+          dateLabel: null,
+          city: null,
+          href: emailHref,
+        })
+        handledDocIds.add(d.id)
+      }
+    }
+  }
+
+  // Orphan documents not tied to any handled email (manual / seed data).
+  for (const d of trip.documents) {
+    if (handledDocIds.has(d.id)) continue
+    items.push({
+      key: `doc-${d.id}`,
+      type: categoryDocType(d.category),
+      title: d.title,
+      subtitle: d.notes ?? undefined,
+      dateMs: null,
+      dateLabel: null,
+      city: null,
+      href: d.sourceEmailId ? `/trips/${trip.slug}/inbox/${d.sourceEmailId}` : undefined,
+    })
+  }
+
+  // Distinct cities for the filter chips.
+  const cities = [...new Set(items.map((i) => i.city).filter((c): c is string => Boolean(c)))].sort()
+
   const inboxAddress = `inbox+${trip.inboxToken}@${inboxDomain}`
-  const travelDocs = trip.documents.filter((d) => ['passport', 'visa', 'insurance'].includes(d.category))
-  const bookingDocs = trip.documents.filter((d) => !['passport', 'visa', 'insurance'].includes(d.category))
 
   return (
     <>
@@ -98,73 +181,8 @@ export default async function DocumentsPage({ params }: { params: Promise<{ trip
         </p>
       </div>
 
-      <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-7xl space-y-8 sm:space-y-10">
-        {/* Stored files — the actual PDFs / images from booking emails.
-            These open the real confirmation, not just metadata. */}
-        {files.length > 0 && (
-          <section>
-            <div className="flex items-baseline justify-between mb-4">
-              <h2 className="font-display text-2xl">Files</h2>
-              <span className="text-xs text-ink-muted">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {files.map((f) => {
-                const Icon = fileIcon(f.mimeType)
-                return (
-                  <a
-                    key={f.id}
-                    href={`/api/attachments/${f.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group border border-line rounded-xl bg-paper-pure p-4 hover:border-sage hover:shadow-soft transition flex items-center gap-3"
-                  >
-                    <div className="w-11 h-11 rounded-lg bg-sage-soft grid place-items-center shrink-0">
-                      <Icon className="w-5 h-5 text-sage" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-display text-sm leading-tight truncate">{f.filename}</div>
-                      <div className="text-[10px] text-ink-muted num-mono mt-0.5">
-                        {(f.size / 1024).toFixed(0)} KB
-                        {f.email?.subject ? <span className="hidden sm:inline"> · {f.email.subject}</span> : null}
-                      </div>
-                    </div>
-                    <ExternalLink className="w-3.5 h-3.5 text-ink-muted/50 group-hover:text-sage shrink-0" />
-                  </a>
-                )
-              })}
-            </div>
-          </section>
-        )}
-
-        <section>
-          <div className="flex items-baseline justify-between mb-4">
-            <h2 className="font-display text-2xl">Travel</h2>
-            <span className="text-xs text-ink-muted">{travelDocs.length} items</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {travelDocs.map((d) => (
-              <DocCard key={d.id} doc={d} tripSlug={trip.slug} />
-            ))}
-            <button className="border-2 border-dashed border-line rounded-xl bg-paper/40 p-5 hover:bg-paper-pure transition grid place-items-center min-h-[220px]">
-              <div className="text-center text-ink-muted">
-                <Upload className="w-6 h-6 mx-auto mb-2" />
-                <div className="text-sm">Drop or forward to add</div>
-              </div>
-            </button>
-          </div>
-        </section>
-
-        <section>
-          <div className="flex items-baseline justify-between mb-4">
-            <h2 className="font-display text-2xl">Bookings &amp; vouchers</h2>
-            <span className="text-xs text-ink-muted">{bookingDocs.length} items</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {bookingDocs.map((d) => (
-              <DocCard key={d.id} doc={d} tripSlug={trip.slug} />
-            ))}
-          </div>
-        </section>
+      <div className="px-4 sm:px-10 py-6 sm:py-10 max-w-7xl">
+        <DocumentsBrowserClient items={items} cities={cities} />
       </div>
     </>
   )

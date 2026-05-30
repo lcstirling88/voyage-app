@@ -1,5 +1,6 @@
 import { requireTripAccess } from '@/lib/session'
 import { TopBar } from '@/components/TopBar'
+import { BottomNav } from '@/components/BottomNav'
 
 /**
  * Trip layout — no sidebar. The previous left rail (trip switcher, feature
@@ -24,7 +25,10 @@ export default async function TripLayout({
   return (
     <main className="min-h-dvh">
       <TopBar trip={trip} />
-      {children}
+      {/* Bottom padding clears the fixed mobile BottomNav (incl. safe-area
+          inset). Removed at lg+ where the bar is hidden. */}
+      <div className="pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0">{children}</div>
+      <BottomNav tripSlug={tripSlug} />
     </main>
   )
 }

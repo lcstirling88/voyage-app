@@ -39,7 +39,7 @@ export const SESSION_DEFAULT_HOUR: Record<Session, number> = {
 
 export function sessionForHour(h: number): Session {
   if (h < 12) return 'morning'
-  if (h < 18) return 'afternoon'
+  if (h < 17) return 'afternoon'   // 17:00 (5pm) onward is night — dinner reservations belong there
   return 'night'
 }
 
@@ -48,17 +48,17 @@ export function sessionForHour(h: number): Session {
  * Used for all-day activities that span sessions (e.g. ski lessons 09:30–15:45
  * appear in BOTH morning and afternoon).
  *
- * Session minute boundaries: morning [0, 720), afternoon [720, 1080), night [1080, 1440)
- * Strict comparisons at boundaries to avoid an event ending right at noon being
- * tagged as "afternoon".
+ * Session minute boundaries: morning [0, 720), afternoon [720, 1020), night [1020, 1440)
+ * (1020 = 17:00 / 5pm). Strict comparisons at boundaries to avoid an event ending
+ * right at noon being tagged as "afternoon".
  */
 export function sessionsForRange(startMin: number, endMin: number): Session[] {
   // Clamp wraparound and instant ranges
   if (endMin < startMin) endMin = startMin
   const result: Session[] = []
   if (startMin < 720 && (endMin > 0 || startMin === endMin))    result.push('morning')
-  if (startMin < 1080 && endMin > 720)                            result.push('afternoon')
-  if (endMin > 1080)                                              result.push('night')
+  if (startMin < 1020 && endMin > 720)                            result.push('afternoon')
+  if (endMin > 1020)                                              result.push('night')
   // Safety: if somehow nothing matched, default to the session of startMin
   if (result.length === 0) result.push(sessionForHour(Math.floor(startMin / 60)))
   return result

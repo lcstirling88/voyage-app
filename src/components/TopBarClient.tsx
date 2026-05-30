@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, ChevronLeft } from 'lucide-react'
 
 const tabTitles: Record<string, string> = {
   overview: 'Overview',
@@ -13,7 +13,7 @@ const tabTitles: Record<string, string> = {
   documents: 'Documents',
   checklist: 'Packing Assist',
   assistant: 'AI Assistant',
-  inbox: 'Forward bookings',
+  inbox: 'Emails',
   settings: 'Trip settings',
 }
 
@@ -27,6 +27,19 @@ export function TopBarBreadcrumb({ tripName }: { tripName: string }) {
 
   return (
     <div className="flex items-center gap-2 text-sm text-ink-muted min-w-0">
+      {/* Mobile-only back affordance. The full breadcrumb is hidden on mobile,
+          so without this the only way "up" to the trip launcher was the
+          browser's back gesture (the #5 navigation complaint). Hidden on the
+          overview itself (already home) and on md+ where the breadcrumb shows. */}
+      {!onOverview && (
+        <Link
+          href={`/trips/${slug}/overview`}
+          aria-label="Back to trip home"
+          className="md:hidden inline-flex items-center -ml-1 p-1 text-ink-muted hover:text-ink shrink-0"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </Link>
+      )}
       {/* Full breadcrumb on tablet+ */}
       <Link href="/profile" className="hidden md:inline hover:text-ink ulink">
         My Profile

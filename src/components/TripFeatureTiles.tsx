@@ -113,7 +113,7 @@ export function TripFeatureTiles({
     },
     {
       href: `/trips/${tripSlug}/inbox`,
-      label: 'Forward bookings',
+      label: 'Emails',
       preview: inboxPreview,
       Icon: Mail,
       tintBg: 'rgba(138, 122, 78, 0.14)',   // Dry grass

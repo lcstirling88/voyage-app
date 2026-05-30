@@ -7,6 +7,17 @@ import { themes, type ThemeKey } from '@/lib/theme'
 
 const DEFAULT_CURRENCIES = ['AUD', 'USD', 'GBP', 'EUR', 'NZD', 'JPY', 'SGD']
 
+// Parse the stored comma-separated ages ("8, 11") into a fixed-length array
+// matching the child count. Blank/unknown entries become '' (the "Age —"
+// option). Stays comma-separated on save so downstream consumers are unchanged.
+function parseChildAges(raw: string | null | undefined, count: number): string[] {
+  const parsed = (raw ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s !== '')
+  return Array.from({ length: count }, (_, i) => parsed[i] ?? '')
+}
+
 function PaletteOption({
   value, current, onPick, label, sample,
 }: {
@@ -65,7 +76,9 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
   const [themeKey] = useState<ThemeKey>(trip.themeKey as ThemeKey)
   const [adultCount, setAdultCount] = useState(trip.adultCount ?? 1)
   const [childCount, setChildCount] = useState(trip.childCount ?? 0)
-  const [childrenAges, setChildrenAges] = useState(trip.childrenAges ?? '')
+  const [childAges, setChildAges] = useState<string[]>(
+    parseChildAges(trip.childrenAges, trip.childCount ?? 0),
+  )
   const [colorPalette, setColorPalette] = useState(trip.colorPalette || 'pastel')
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -75,6 +88,16 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
   const [deletePending, startDeleteTransition] = useTransition()
 
   const previewTheme = themes[themeKey]
+
+  // Keep the per-child age array length in lock-step with the child count.
+  function changeChildCount(next: number) {
+    const safe = Math.max(0, Math.min(20, next))
+    setChildCount(safe)
+    setChildAges((prev) => Array.from({ length: safe }, (_, i) => prev[i] ?? ''))
+  }
+  function setChildAge(index: number, value: string) {
+    setChildAges((prev) => prev.map((a, i) => (i === index ? value : a)))
+  }
 
   function save(e: React.FormEvent) {
     e.preventDefault()
@@ -93,7 +116,9 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
     fd.set('themeKey', themeKey)
     fd.set('adultCount', String(adultCount))
     fd.set('childCount', String(childCount))
-    fd.set('childrenAges', childrenAges)
+    // Persist as comma-separated ages, dropping any left unset. Note '0' (an
+    // infant under 1) is a valid age and must survive the filter.
+    fd.set('childrenAges', childAges.filter((a) => a !== '').join(', '))
     fd.set('colorPalette', colorPalette)
     startTransition(async () => {
       const res = (await editTrip(fd)) as EditTripResult
@@ -166,12 +191,33 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
           </div>
           <div>
             <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Children</label>
-            <input className="input mt-1.5 num-mono" type="number" min={0} max={20} value={childCount} onChange={(e) => setChildCount(Math.max(0, parseInt(e.target.value, 10) || 0))} />
+            <input className="input mt-1.5 num-mono" type="number" min={0} max={20} value={childCount} onChange={(e) => changeChildCount(parseInt(e.target.value, 10) || 0)} />
           </div>
           {childCount > 0 && (
             <div className="col-span-2">
-              <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Children&apos;s ages</label>
-              <input className="input mt-1.5" value={childrenAges} onChange={(e) => setChildrenAges(e.target.value)} placeholder="e.g. 8, 11" />
+              <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">
+                Children&apos;s ages <span className="normal-case tracking-normal text-ink-muted/70">— tailors recommendations</span>
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5">
+                {childAges.map((age, i) => (
+                  <div key={i}>
+                    <span className="text-[10px] text-ink-muted">Child {i + 1}</span>
+                    <select
+                      className="input mt-1"
+                      value={age}
+                      onChange={(e) => setChildAge(i, e.target.value)}
+                      aria-label={`Age of child ${i + 1}`}
+                    >
+                      <option value="">Age —</option>
+                      {Array.from({ length: 18 }, (_, n) => (
+                        <option key={n} value={String(n)}>
+                          {n === 0 ? 'Under 1' : `${n} yr${n === 1 ? '' : 's'}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           <div className="col-span-2">

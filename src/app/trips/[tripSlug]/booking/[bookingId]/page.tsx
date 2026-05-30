@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ChevronLeft, ExternalLink } from 'lucide-react'
+import { ChevronLeft, ExternalLink, Paperclip, FileText } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
 import { BookingEditFormClient } from '@/components/BookingEditFormClient'
@@ -17,7 +17,20 @@ export default async function BookingPage({ params }: { params: Promise<{ tripSl
 
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
-    include: { trip: true, sourceEmail: true },
+    include: {
+      trip: true,
+      sourceEmail: {
+        include: {
+          // Only attachments with a real stored file behind them (non-empty
+          // storagePath) are downloadable via the /api/attachments proxy.
+          attachments: {
+            where: { storagePath: { not: '' } },
+            select: { id: true, filename: true, mimeType: true, size: true },
+            orderBy: { filename: 'asc' },
+          },
+        },
+      },
+    },
   })
   if (!booking || booking.trip.slug !== tripSlug) notFound()
 
@@ -48,6 +61,36 @@ export default async function BookingPage({ params }: { params: Promise<{ tripSl
       </div>
 
       <div className="px-4 sm:px-10 py-8 sm:py-12 max-w-4xl">
+        {/* Documents attached to the booking's source email — the actual
+            e-ticket / voucher PDFs, downloadable via the authenticated proxy.
+            Shown above the edit form so they're visible without scrolling. */}
+        {booking.sourceEmail && booking.sourceEmail.attachments.length > 0 && (
+          <section className="border border-line rounded-xl bg-paper-pure p-5 sm:p-6 mb-8">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted flex items-center gap-2 mb-3">
+              <Paperclip className="w-3 h-3" />
+              <span>Documents · {booking.sourceEmail.attachments.length}</span>
+            </div>
+            <ul className="space-y-1.5 text-sm">
+              {booking.sourceEmail.attachments.map((a) => (
+                <li key={a.id}>
+                  <a
+                    href={`/api/attachments/${a.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-center gap-3 -mx-2 px-2 py-1.5 rounded hover:bg-line-soft/40 transition"
+                  >
+                    <FileText className="w-4 h-4 shrink-0 text-sage" />
+                    <span className="flex-1 min-w-0 truncate group-hover:text-sage">{a.filename}</span>
+                    <span className="text-[10px] num-mono text-ink-muted shrink-0 hidden sm:inline">{a.mimeType}</span>
+                    <span className="text-[10px] num-mono text-ink-muted shrink-0">{(a.size / 1024).toFixed(0)}KB</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-ink-muted/60 group-hover:text-sage shrink-0" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <BookingEditFormClient
           initial={{
             id: booking.id,
