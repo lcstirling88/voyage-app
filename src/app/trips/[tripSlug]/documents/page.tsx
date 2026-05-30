@@ -113,7 +113,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ trip
                 return (
                   <a
                     key={f.id}
-                    href={f.storagePath}
+                    href={`/api/attachments/${f.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="group border border-line rounded-xl bg-paper-pure p-4 hover:border-sage hover:shadow-soft transition flex items-center gap-3"

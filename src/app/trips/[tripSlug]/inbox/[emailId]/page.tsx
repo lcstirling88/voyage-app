@@ -170,7 +170,7 @@ export default async function EmailDetailPage({
                 return hasFile ? (
                   <li key={a.id}>
                     <a
-                      href={a.storagePath}
+                      href={`/api/attachments/${a.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="group flex items-center gap-3 -mx-2 px-2 py-1 rounded hover:bg-line-soft/40 transition"

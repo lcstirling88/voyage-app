@@ -27,9 +27,11 @@ export function blobConfigured(): boolean {
 }
 
 /**
- * Upload one attachment to Blob and return its public URL, or null if Blob
- * isn't configured or the upload failed. Never throws — attachment storage
- * is best-effort and must not break email ingestion.
+ * Upload one attachment to Blob and return its URL, or null if Blob isn't
+ * configured or the upload failed. The store is private, so this URL is NOT
+ * publicly fetchable — it's resolved server-side by /api/attachments/[id]
+ * after a trip-access check. Never throws — attachment storage is best-effort
+ * and must not break email ingestion.
  */
 export async function uploadAttachment(opts: {
   tripSlug: string
@@ -42,8 +44,12 @@ export async function uploadAttachment(opts: {
     // Lazy import so the module isn't pulled in (or its env read) unless used.
     const { put } = await import('@vercel/blob')
     const key = `trips/${opts.tripSlug}/${Date.now()}-${safeName(opts.filename)}`
+    // Private store: these are passports, e-tickets and vouchers, so the bytes
+    // must never be reachable via a bare public URL. We persist the blob URL
+    // and stream it back through /api/attachments/[id], which checks trip
+    // membership first. (A public store would leak files to anyone with the URL.)
     const result = await put(key, Buffer.from(opts.bytes), {
-      access: 'public',
+      access: 'private',
       contentType: opts.mimeType || 'application/octet-stream',
       addRandomSuffix: true,
     })
