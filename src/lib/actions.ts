@@ -1,7 +1,7 @@
 'use server'
 
 import { randomBytes } from 'crypto'
-import { format, startOfDay } from 'date-fns'
+import { format, startOfDay, eachDayOfInterval } from 'date-fns'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { Resend } from 'resend'
@@ -14,7 +14,11 @@ import { getAnthropic, PARSER_MODEL } from './anthropic'
 import { profileForDestination, profileForIsoNumeric } from './destinations'
 import { uploadAttachment } from './blob'
 import { getTripSegments } from './segments'
-import { cityForBooking, sessionForHour, SESSION_DEFAULT_HOUR, type Session } from './itinerary'
+import {
+  cityForBooking, sessionForHour, SESSION_DEFAULT_HOUR,
+  planForDay, SESSIONS, sleepingTonightFor,
+  type Session, type SessionItem,
+} from './itinerary'
 import { allocate, mapRowsToSkeleton, cityForDate, tripNights, type RouteStop, type SkeletonStop } from './skeleton'
 import { generateRoute } from './trip-planner'
 import type { Booking } from '@prisma/client'
@@ -657,6 +661,7 @@ async function createSuggestionRows(
   trip: { id: string; startDate: Date; endDate: Date; localCurrency: string | null; homeCurrency: string },
   items: PlanItem[],
   prefs: PlanPrefs,
+  blocked?: Set<string>,
 ): Promise<number> {
   const tripStart = startOfDay(trip.startDate)
   const tripEnd = startOfDay(trip.endDate)
@@ -666,6 +671,9 @@ async function createSuggestionRows(
     const day = startOfDay(new Date(`${it.date}T00:00:00Z`))
     if (day < tripStart || day > tripEnd) continue
     const session = it.session === 'morning' || it.session === 'afternoon' || it.session === 'night' ? it.session : 'afternoon'
+    // Clash guard: never land a suggestion in a (date, session) already taken by a
+    // real booking or reserved for travel — even if the model ignored the brief.
+    if (blocked?.has(`${it.date}|${session}`)) continue
     const time = SESSION_TIME[session] ?? '12:00'
     const startAt = new Date(`${it.date}T${time}:00Z`)
     if (isNaN(startAt.getTime())) continue
@@ -690,6 +698,98 @@ async function createSuggestionRows(
     count++
   }
   return count
+}
+
+/** Short human label for what's already filling a session (for the model's brief). */
+function sessionItemLabel(it: SessionItem): string {
+  const t = it.booking.title
+  switch (it.kind) {
+    case 'hotel-checkin': return `check in to ${t}`
+    case 'hotel-checkout': return `check out of ${t}`
+    case 'car-pickup': return `collect hire car (${t})`
+    case 'car-return': return `return hire car (${t})`
+    case 'staying-tonight': return `staying at ${t}`
+    default: return t
+  }
+}
+
+/**
+ * Work out, day by day, which sessions are already spoken for so the planner only
+ * fills genuinely free time — and so it respects travel between cities.
+ *
+ * A session is BLOCKED when:
+ *   - a real (non-'idea') booking already occupies it — reuses planForDay so the
+ *     occupancy matches exactly what the traveller sees on the itinerary;
+ *   - it's the MORNING of an inter-city arrival day (the base city changed since
+ *     yesterday) — leave time for the journey and don't collide with check-in;
+ *   - it's at/after a departure flight on a day with no bed that night — once
+ *     they've flown out, the rest of the day is travel, not sightseeing.
+ *
+ * Returns the blocked "YYYY-MM-DD|session" keys (a hard guard for
+ * createSuggestionRows) plus a per-day OPEN/committed briefing for the prompt.
+ */
+function buildClashContext(
+  trip: { destination: string; startDate: Date; endDate: Date },
+  skeleton: { scheduled: boolean; stops: SkeletonStop[] },
+  bookings: readonly Booking[],
+): { blocked: Set<string>; briefing: string } {
+  const real = bookings.filter((b) => b.status !== 'idea')
+  const days = eachDayOfInterval({ start: startOfDay(trip.startDate), end: startOfDay(trip.endDate) })
+  const blocked = new Set<string>()
+  const lines: string[] = []
+  let prevCity: string | null = null
+
+  for (const day of days) {
+    const dateStr = format(day, 'yyyy-MM-dd')
+
+    // Where they SLEEP this night (hotel) or are BASED (route) — the same logic
+    // the itinerary uses, so travel detection matches what they see.
+    const sleeping = sleepingTonightFor(day, real)
+    const hotelCity = sleeping ? cityForBooking(sleeping) : null
+    const plannedCity = skeleton.scheduled ? cityForDate(skeleton.stops, day, trip.endDate) : null
+    const city = hotelCity ?? plannedCity
+
+    const plan = planForDay(day, real)
+    const committed: string[] = []
+    for (const s of SESSIONS) {
+      if (plan.sessions[s].length) {
+        blocked.add(`${dateStr}|${s}`)
+        committed.push(`${s} (${plan.sessions[s].map(sessionItemLabel).join(', ')})`)
+      }
+    }
+
+    // Inter-city arrival → keep the morning free for the journey + check-in.
+    const arriving = !!(prevCity && city && city !== prevCity)
+    if (arriving) blocked.add(`${dateStr}|morning`)
+
+    // Departure → no bed tonight and a flight/transit leaves today: block that
+    // session and everything after it.
+    const flightSessions = SESSIONS.filter((s) =>
+      plan.sessions[s].some(
+        (it) => it.kind === 'booking' && (it.booking.type === 'flight' || it.booking.type === 'transit'),
+      ),
+    )
+    const departing = !sleeping && flightSessions.length > 0
+    if (departing) {
+      const from = Math.min(...flightSessions.map((s) => SESSIONS.indexOf(s)))
+      for (let i = from; i < SESSIONS.length; i++) blocked.add(`${dateStr}|${SESSIONS[i]}`)
+    }
+
+    const open = SESSIONS.filter((s) => !blocked.has(`${dateStr}|${s}`))
+    const flags: string[] = []
+    if (arriving) flags.push(`TRAVEL DAY — arriving in ${city}; keep the morning free for the journey & check-in`)
+    if (departing) flags.push(`DEPARTURE DAY — leaving ${prevCity ?? city ?? trip.destination}; suggest nothing after the flight`)
+    const flagNote = flags.length ? ` [${flags.join(' | ')}]` : ''
+    const committedNote = committed.length ? ` Already booked: ${committed.join('; ')}.` : ''
+    lines.push(
+      `  ${dateStr} — based in ${city ?? trip.destination}; OPEN: ${open.length ? open.join(', ') : 'none (leave this day as-is)'}.` +
+      `${committedNote}${flagNote}`,
+    )
+
+    prevCity = city ?? prevCity
+  }
+
+  return { blocked, briefing: lines.join('\n') }
 }
 
 /**
@@ -750,11 +850,10 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
   // famous cities (e.g. adding Kyoto to a Tokyo + Hokkaido trip).
   const citiesLine = tripCities.length ? tripCities.join(', ') : trip.destination
 
-  // What's already planned, so the model fills gaps rather than clashing.
-  const existing = bookings.filter((b) => b.type !== 'hotel')
-  const existingByDay = existing.length
-    ? existing.map((b) => `  ${format(b.startAt, 'yyyy-MM-dd')} ${format(b.startAt, 'HH:mm')} — ${b.title} (${b.type})`).join('\n')
-    : '  (nothing yet)'
+  // Day-by-day occupancy: which sessions are already taken by real bookings and
+  // which days involve inter-city travel. Drives both the brief (OPEN sessions)
+  // and a hard guard so suggestions never clash with what's booked.
+  const { blocked, briefing } = buildClashContext(trip, skeleton, bookings)
 
   const prefs: PlanPrefs = { interests, budgetTier, budgetAmount, pace }
   const { budgetText, paceText } = budgetPaceText(trip.homeCurrency, prefs)
@@ -767,7 +866,7 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
     `Party: ${trip.adultCount} adult(s)${trip.childCount ? `, ${trip.childCount} child(ren)${trip.childrenAges ? ` aged ${trip.childrenAges}` : ''}` : ''}\n` +
     `Local spending currency: ${trip.localCurrency ?? trip.homeCurrency}. ESTIMATE EVERY COST PER PERSON IN THE HOME CURRENCY ${trip.homeCurrency} so it sums against their budget.\n\n` +
     `Accommodation timeline (which city they're based in each night; for any day not covered, use the nearest listed city by date — never introduce a new city):\n${basedIn}\n\n` +
-    `Already on the itinerary (don't duplicate; build around these):\n${existingByDay}\n\n` +
+    `Day-by-day status — place suggestions ONLY in a day's OPEN sessions; never use a session that's already booked, and obey the TRAVEL/DEPARTURE day notes (don't duplicate anything listed):\n${briefing}\n\n` +
     `Interests they ticked:\n${interests.length ? interests.map((i) => `  - ${i}`).join('\n') : '  - (open — surprise them with the classics)'}\n\n` +
     `${budgetText}\nPace: ${paceText}`
 
@@ -794,6 +893,11 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
         `- Put restaurants at sensible meal sessions (lunch = afternoon, dinner = night).\n` +
         `- Name REAL places, never generic ("a museum"). One short sentence per note.\n` +
         `- Don't duplicate things already on the itinerary.\n` +
+        `- CLASHES: use ONLY the OPEN sessions listed for each day. Never place anything in a session ` +
+        `that's already booked — no double-booking the traveller's time.\n` +
+        `- TRAVEL between cities: on a day marked TRAVEL DAY keep the morning free for the journey and ` +
+        `don't schedule anything at hotel check-in time; on a DEPARTURE DAY suggest nothing after the ` +
+        `flight. Leave realistic travel time whenever the base city changes.\n` +
         `- Keep it a focused FIRST DRAFT: about 2-3 per day and no more than ~40 across the whole ` +
         `trip. The traveller can reimagine any day for more later.`,
       tools: [{
@@ -848,7 +952,7 @@ export async function generateTripPlan(formData: FormData): Promise<GenerateTrip
       where: { tripId: trip.id, status: 'idea' },
     })
 
-    const count = await createSuggestionRows(trip, items, prefs)
+    const count = await createSuggestionRows(trip, items, prefs, blocked)
     console.log(`[generateTripPlan] ${tripSlug}: stop=${response.stop_reason} items=${items.length} written=${count}`)
 
     // Items parsed but every one fell outside the trip dates (or failed
@@ -1076,6 +1180,14 @@ export async function regenerateDay(formData: FormData): Promise<RegenerateDayRe
     ? fixed.map((b) => `  ${format(b.startAt, 'HH:mm')} — ${b.title} (${b.type})`).join('\n')
     : '  (nothing fixed — the whole day is open)'
 
+  // Sessions still free after real bookings + any travel reservations on this
+  // day. The model fills only these; the same set hard-guards the written rows.
+  const { blocked } = buildClashContext(trip, skeleton, allBookings)
+  const openSessions = SESSIONS.filter((s) => !blocked.has(`${dateStr}|${s}`))
+  const openText = openSessions.length
+    ? openSessions.join(', ')
+    : 'none — this day is full (travel / already booked), so return an empty list'
+
   const context =
     `Trip: ${trip.name} — ${trip.destination}\n` +
     `Plan ${dateStr}: a day based in ${city}. Aim for ${paceText}.\n` +
@@ -1083,7 +1195,8 @@ export async function regenerateDay(formData: FormData): Promise<RegenerateDayRe
     `Interests: ${prefs.interests.length ? prefs.interests.join(', ') : '(open — classics welcome)'}\n` +
     `${budgetText}\n` +
     `Everything must be real, specific, named places in ${city}, grouped so the day flows.\n` +
-    `Already fixed this day (build around these, don't clash):\n${fixedText}\n` +
+    `Fill ONLY these OPEN sessions (the rest are booked or reserved for travel): ${openText}.\n` +
+    `Already fixed this day (build around these, never clash with them):\n${fixedText}\n` +
     `Do NOT repeat any of these (already elsewhere on the trip):\n${avoid.length ? avoid.map((t) => `  - ${t}`).join('\n') : '  (none)'}`
 
   try {
@@ -1094,7 +1207,8 @@ export async function regenerateDay(formData: FormData): Promise<RegenerateDayRe
         `You are a local travel concierge planning ONE day in ${city}. Every place must be real, ` +
         `named, and in ${city}. Cluster places by area so the day flows with little back-and-forth. ` +
         `Honour the interests, budget and pace. Put restaurants at meal sessions (lunch = afternoon, ` +
-        `dinner = night). Don't duplicate the fixed items or anything in the avoid list. One short ` +
+        `dinner = night). Use ONLY the OPEN sessions named in the brief — never a session that's ` +
+        `already booked. Don't duplicate the fixed items or anything in the avoid list. One short ` +
         `sentence per note.`,
       tools: [{
         name: 'save_day',
@@ -1136,7 +1250,7 @@ export async function regenerateDay(formData: FormData): Promise<RegenerateDayRe
     if (daySuggestionIds.size) {
       await prisma.booking.deleteMany({ where: { id: { in: [...daySuggestionIds] } } })
     }
-    const count = await createSuggestionRows(trip, items, prefs)
+    const count = await createSuggestionRows(trip, items, prefs, blocked)
 
     revalidatePath(`/trips/${tripSlug}/itinerary`)
     revalidatePath(`/trips/${tripSlug}`, 'layout')
