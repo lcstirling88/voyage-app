@@ -23,7 +23,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
     where: { slug: tripSlug },
     include: {
       cities: { select: { id: true } },
-      bookings: { select: { cost: true, currency: true, paid: true, status: true } },
+      bookings: { select: { cost: true, currency: true, paid: true, status: true, type: true, cancelByAt: true } },
       checklistItems: { select: { done: true } },
       _count: { select: { bookings: { where: { type: { not: 'note' } } }, documents: true, emails: { where: { processed: false } } } },
     },
@@ -59,6 +59,22 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
   const costsPreview = totalBudget === 0
     ? 'Add a cost to track'
     : `${paidPct}% paid · ${fmtMoney(paidSoFar, trip.homeCurrency)}`
+  // Cancellations preview: surface the most actionable thing — a deadline inside
+  // the next week, otherwise how many free-cancel windows are still open.
+  const cancellableBookings = trip.bookings.filter((b) => b.type !== 'note' && isCommittedStatus(b.status))
+  const now = new Date()
+  const openDeadlines = cancellableBookings
+    .map((b) => b.cancelByAt)
+    .filter((d): d is Date => d != null && d.getTime() >= now.getTime())
+    .sort((a, b) => a.getTime() - b.getTime())
+  const soonestDeadline = openDeadlines[0]
+  const cancellationsPreview = cancellableBookings.length === 0
+    ? 'Nothing to cancel yet'
+    : soonestDeadline && soonestDeadline.getTime() - now.getTime() <= 7 * 86400000
+      ? `Cancel by ${fmtDate(soonestDeadline, 'd MMM')} — soon`
+      : openDeadlines.length > 0
+        ? `${openDeadlines.length} free-cancel ${openDeadlines.length === 1 ? 'window' : 'windows'} open`
+        : 'Set cancellation terms'
   const weatherPreview = `${tripDays}-day forecast`
   const localPreview = trip.localInfoJson
     ? 'Tipping · plugs · phrases'
@@ -165,6 +181,7 @@ export default async function OverviewPage({ params }: { params: Promise<{ tripS
         itineraryPreview={itineraryPreview}
         costsPreview={costsPreview}
         costsPct={paidPct}
+        cancellationsPreview={cancellationsPreview}
         weatherPreview={weatherPreview}
         localPreview={localPreview}
         documentsPreview={documentsPreview}

@@ -151,11 +151,11 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
         </div>
 
         <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Trip name *</label>
             <input className="input mt-1.5 text-2xl font-display" value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} />
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Tagline</label>
             <input className="input mt-1.5" value={tagline} onChange={(e) => setTagline(e.target.value)} maxLength={140} />
           </div>
@@ -181,7 +181,7 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
               {DEFAULT_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Travellers</label>
             <input className="input mt-1.5" value={travelerNames} onChange={(e) => setTravelerNames(e.target.value)} />
           </div>
@@ -194,7 +194,7 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
             <input className="input mt-1.5 num-mono" type="number" min={0} max={20} value={childCount} onChange={(e) => changeChildCount(parseInt(e.target.value, 10) || 0)} />
           </div>
           {childCount > 0 && (
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">
                 Children&apos;s ages <span className="normal-case tracking-normal text-ink-muted/70">— tailors recommendations</span>
               </label>
@@ -220,7 +220,7 @@ export function EditTripFormClient({ trip }: { trip: TripData }) {
               </div>
             </div>
           )}
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Accommodation colour scheme</label>
             <div className="grid grid-cols-3 gap-2 mt-1.5">
               <PaletteOption value="pastel" current={colorPalette} onPick={setColorPalette}

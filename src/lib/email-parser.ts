@@ -103,7 +103,7 @@ const TOOL = {
             cancellationPolicy: { type: 'string' as const, description: 'One-sentence summary of the cancellation policy (e.g. "Free cancellation up to 48 hours before check-in").' },
             metadata: {
               type: 'object' as const,
-              description: 'Type-specific extras: checkIn/checkOut/breakfast/nights for hotels; seats/class/baggage for flights; etc.',
+              description: 'Type-specific extras: checkIn/checkOut/breakfast/nights for hotels; for flights ALWAYS include flightNumber (IATA code, e.g. "QF25") plus departureAirport/arrivalAirport (IATA codes) and airline when present, and terminal/gate/seat/cabin if stated; dropoffLocation/vehicle for cars; bookedUnder/partySize for restaurants; etc.',
               additionalProperties: true,
             },
           },
@@ -173,7 +173,7 @@ async function parseWithClaude(email: EmailInput): Promise<ParserResult> {
 GUIDELINES:
 - One email can contain multiple bookings (e.g. a flight itinerary with outbound + return, or a hotel + airport transfer).
 - Hotel emails: type "hotel", startAt = check-in datetime, endAt = check-out datetime, put breakfast/checkIn/checkOut/nights in metadata.
-- Flight emails: type "flight", startAt = departure, endAt = arrival, put seats/class/baggage in metadata.
+- Flight emails: type "flight", startAt = departure, endAt = arrival. In metadata, ALWAYS capture these when present — they power live delay/cancellation tracking: flightNumber (the IATA code exactly as written, e.g. "QF25", "NZ247"; combine the carrier code and number with no space), airline (carrier name), departureAirport and arrivalAirport (3-letter IATA codes, e.g. "SYD", "AKL" — if only city names are given, use the primary airport's IATA code). Also put terminal, gate, seat, and cabin/class in metadata when stated. One booking per flight leg — split multi-leg itineraries (including connections) into separate flight bookings, each with its own flightNumber.
 - Restaurant emails: type "restaurant", startAt = reservation time. Put the name the booking is held under in metadata.bookedUnder (e.g. "Lauren Stirling"), and the party size in metadata.partySize (e.g. 2) when stated.
 - Tour/activity emails: type "activity". If the activity spans multiple days (e.g. "4-day ski lessons", "3-day cooking course"), set endAt to the last day so it shows on each day of its span.
 - Car rental emails: type "car", startAt = pickup datetime, endAt = return datetime, location = pickup location, put dropoffLocation/vehicle/insurance in metadata.
@@ -384,6 +384,7 @@ function parseWithMock(email: EmailInput): ParserResult {
         title: `Flight ${flightMatch?.[1] ?? ''}`,
         vendor: email.from.split('@')[1]?.split('.')[0] ?? undefined,
         startAt: extractDateOrNext(email.text, 30) + 'T09:00:00Z',
+        metadata: flightMatch?.[1] ? { flightNumber: flightMatch[1] } : {},
       }],
       documents: [{ category: 'ticket', title: `Flight ${flightMatch?.[1] ?? ''}` }],
       payments: [],

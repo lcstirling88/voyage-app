@@ -4,7 +4,12 @@ import { ChevronLeft, ExternalLink, Paperclip, FileText } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { requireTripAccess } from '@/lib/session'
 import { BookingEditFormClient } from '@/components/BookingEditFormClient'
-import { safeJson, fmtDateInput, fmtTime } from '@/lib/format'
+import { FlightStatusPanel, type FlightScheduled, type FlightStatusView } from '@/components/FlightStatusPanel'
+import {
+  getFlightStatus, isFlightStatusConfigured, isWithinTrackingWindow,
+  flightTrackingWindow, normalizeFlightIata,
+} from '@/lib/flight-status'
+import { safeJson, fmtDate, fmtDateInput, fmtTime } from '@/lib/format'
 
 const TYPE_LABELS: Record<string, string> = {
   hotel: 'Hotel', flight: 'Flight', activity: 'Activity',
@@ -36,6 +41,52 @@ export default async function BookingPage({ params }: { params: Promise<{ tripSl
 
   const meta = (safeJson<Record<string, string>>(booking.metadata) ?? {}) as Record<string, string>
 
+  // ----- Flight live status (AviationStack) -----------------------------------
+  // Only flights get this. We gate hard so the free-tier quota is spent only on
+  // the travel day, and degrade gracefully when there's no key / no flight
+  // number / the flight is far off. Everything else just shows booked details.
+  let flightScheduled: FlightScheduled | null = null
+  let flightView: FlightStatusView | null = null
+  if (booking.type === 'flight') {
+    const flightNumberRaw = String(meta.flightNumber ?? '').trim()
+    const flightIata = normalizeFlightIata(flightNumberRaw)
+    flightScheduled = {
+      flightNumber: flightNumberRaw,
+      airline: String(meta.airline ?? booking.vendor ?? '').trim(),
+      fromCode: String(meta.departureAirport ?? '').toUpperCase().trim(),
+      toCode: String(meta.arrivalAirport ?? '').toUpperCase().trim(),
+      depTime: fmtTime(booking.startAt),
+      arrTime: booking.endAt ? fmtTime(booking.endAt) : '',
+      dateLabel: fmtDate(booking.startAt, 'EEE d MMM'),
+      terminal: String(meta.terminal ?? '').trim(),
+      gate: String(meta.gate ?? '').trim(),
+      seat: String(meta.seat ?? '').trim(),
+      cabin: String(meta.cabin ?? meta.class ?? '').trim(),
+    }
+
+    if (!flightIata) {
+      flightView = { kind: 'no_number' }
+    } else if (!isFlightStatusConfigured()) {
+      flightView = { kind: 'unconfigured' }
+    } else if (!isWithinTrackingWindow(booking.startAt, booking.endAt)) {
+      const { opensAt } = flightTrackingWindow(booking.startAt, booking.endAt)
+      flightView = new Date() < opensAt
+        ? { kind: 'scheduled', note: `Live tracking switches on around ${fmtDate(opensAt, 'd MMM')} — the day before departure.` }
+        : { kind: 'scheduled', note: 'This flight has departed; live tracking has wound down.' }
+    } else {
+      const result = await getFlightStatus(flightIata, fmtDateInput(booking.startAt))
+      if (result.state === 'ok') {
+        flightView = { kind: 'live', data: result.data }
+      } else if (result.state === 'unconfigured') {
+        flightView = { kind: 'unconfigured' }
+      } else if (result.state === 'not_found') {
+        flightView = { kind: 'scheduled', note: `No live status yet for ${flightIata} on ${fmtDate(booking.startAt, 'd MMM')}. Check again closer to departure.` }
+      } else {
+        flightView = { kind: 'scheduled', note: result.message }
+      }
+    }
+  }
+
   return (
     <>
       <div className="hero-light border-b border-line">
@@ -61,6 +112,12 @@ export default async function BookingPage({ params }: { params: Promise<{ tripSl
       </div>
 
       <div className="px-4 sm:px-10 py-8 sm:py-12 max-w-4xl">
+        {/* Live flight status — delays, gate, cancellation. Only on flights;
+            degrades to booked details + a nudge when not connected/in window. */}
+        {flightScheduled && flightView && (
+          <FlightStatusPanel scheduled={flightScheduled} view={flightView} />
+        )}
+
         {/* Documents attached to the booking's source email — the actual
             e-ticket / voucher PDFs, downloadable via the authenticated proxy.
             Shown above the edit form so they're visible without scrolling. */}
@@ -116,6 +173,14 @@ export default async function BookingPage({ params }: { params: Promise<{ tripSl
             checkIn: meta.checkIn ?? '',
             checkOut: meta.checkOut ?? '',
             breakfast: meta.breakfast ?? '',
+            flightNumber: String(meta.flightNumber ?? ''),
+            airline: String(meta.airline ?? ''),
+            departureAirport: String(meta.departureAirport ?? ''),
+            arrivalAirport: String(meta.arrivalAirport ?? ''),
+            terminal: String(meta.terminal ?? ''),
+            gate: String(meta.gate ?? ''),
+            seat: String(meta.seat ?? ''),
+            cabin: String(meta.cabin ?? meta.class ?? ''),
           }}
         />
       </div>

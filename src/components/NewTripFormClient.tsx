@@ -83,7 +83,7 @@ export function NewTripFormClient() {
 
       {/* Fields */}
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Trip name *</label>
           <input
             className="input mt-1.5 text-2xl font-display"
@@ -95,7 +95,7 @@ export function NewTripFormClient() {
           />
         </div>
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Tagline (optional)</label>
           <input
             className="input mt-1.5"
@@ -160,7 +160,7 @@ export function NewTripFormClient() {
           </select>
         </div>
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Travellers</label>
           <input
             className="input mt-1.5"
@@ -193,7 +193,7 @@ export function NewTripFormClient() {
           />
         </div>
         {childCount > 0 && (
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Children&apos;s ages</label>
             <input
               className="input mt-1.5"
@@ -205,7 +205,7 @@ export function NewTripFormClient() {
           </div>
         )}
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Accommodation colour scheme</label>
           <div className="grid grid-cols-3 gap-2 mt-1.5">
             {[
@@ -234,7 +234,7 @@ export function NewTripFormClient() {
           <p className="text-xs text-ink-muted mt-2">Each hotel in your trip gets a distinct colour bar under the day header in your itinerary.</p>
         </div>
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">
             Cities you&apos;ll visit (optional · comma separated)
           </label>

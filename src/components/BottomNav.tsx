@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, CalendarDays, Folder, Wallet, Mail } from 'lucide-react'
+import { Home, CalendarDays, Folder, CloudSun, Coins } from 'lucide-react'
 
 /**
  * Mobile-only bottom tab bar.
@@ -11,17 +11,17 @@ import { Home, CalendarDays, Folder, Wallet, Mail } from 'lucide-react'
  * hidden on mobile — so previously the only way "back" was the browser's
  * swipe gesture, which meant tapping back repeatedly to reach the trip home.
  *
- * This fixed bar gives one-tap access to the four most-used sections plus
- * Home (the Overview launcher, which links on to every other feature). It
- * sits above the iOS home indicator via the safe-area inset and hides on
- * lg+ where the breadcrumb is visible.
+ * This fixed bar gives one-tap access to the four most-used in-trip tools plus
+ * Home (the Overview launcher, which links on to every other feature — Costs,
+ * Emails, Local Info, etc.). It sits above the iOS home indicator via the
+ * safe-area inset and hides on lg+ where the breadcrumb is visible.
  */
 const ITEMS = [
   { seg: 'overview', label: 'Home', Icon: Home },
   { seg: 'itinerary', label: 'Itinerary', Icon: CalendarDays },
   { seg: 'documents', label: 'Docs', Icon: Folder },
-  { seg: 'costs', label: 'Costs', Icon: Wallet },
-  { seg: 'inbox', label: 'Emails', Icon: Mail },
+  { seg: 'weather', label: 'Weather', Icon: CloudSun },
+  { seg: 'currency', label: 'Currency', Icon: Coins },
 ] as const
 
 export function BottomNav({ tripSlug }: { tripSlug: string }) {

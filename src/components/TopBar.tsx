@@ -4,6 +4,8 @@ import { LocalClockClient } from './LocalClockClient'
 import { TopBarBreadcrumb } from './TopBarClient'
 import { timezoneForCity, labelFromTimezone } from '@/lib/cities'
 import { getTripSegments, activeSegment } from '@/lib/segments'
+import { prisma } from '@/lib/db'
+import { requireUser } from '@/lib/session'
 
 /**
  * Sticky top bar on every trip page: breadcrumb on the left, two clocks +
@@ -28,6 +30,16 @@ export async function TopBar({ trip }: { trip: Trip }) {
   const homeTimezone = timezoneForCity(trip.departureCity)
   const homeLabel = homeTimezone ? labelFromTimezone(homeTimezone) : null
 
+  // All trips this user can see — powers the trip switcher in the breadcrumb so
+  // they're never "locked into" the trip they opened (jump to another, the
+  // trips list, or start a new one from anywhere in-trip).
+  const user = await requireUser()
+  const myTrips = await prisma.trip.findMany({
+    where: { memberships: { some: { userId: user.id } } },
+    orderBy: { startDate: 'asc' },
+    select: { slug: true, name: true },
+  })
+
   return (
     // Sticky header. The outer element carries the iOS notch inset
     // (safe-area-inset-top) as padding so, in an installed PWA, the blurred bar
@@ -36,7 +48,7 @@ export async function TopBar({ trip }: { trip: Trip }) {
     // browser tab, so desktop/web is unchanged.
     <header className="border-b border-line bg-paper-pure/80 backdrop-blur sticky top-0 z-30 pt-[env(safe-area-inset-top)]">
       <div className="h-14 lg:h-16 flex items-center px-4 sm:px-6 lg:px-8 gap-3 lg:gap-6">
-        <TopBarBreadcrumb tripName={trip.name} />
+        <TopBarBreadcrumb tripName={trip.name} trips={myTrips} />
         <div className="flex-1" />
 
         {/* Home clock (e.g. Brisbane) — only when we can map the city. */}

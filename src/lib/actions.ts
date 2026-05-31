@@ -11,6 +11,7 @@ import { persistParserResult } from './ingest'
 import { deriveThemeFromDestination, type ThemeKey } from './theme'
 import { requireUser, requireTripAccess } from './session'
 import { getAnthropic, PARSER_MODEL } from './anthropic'
+import { safeJson } from './format'
 import { profileForDestination, profileForIsoNumeric } from './destinations'
 import { uploadAttachment } from './blob'
 import { getTripSegments } from './segments'
@@ -1524,6 +1525,37 @@ export async function retimeBooking(formData: FormData): Promise<RetimeResult> {
   return { ok: true }
 }
 
+// ----- Geocode cache -----------------------------------------------------------------
+
+/**
+ * Persist a booking's resolved coordinates onto its metadata, so the per-day
+ * itinerary maps never have to geocode the same address twice. Called fire-and-
+ * forget from the client map after a Nominatim lookup; we stash the query string
+ * (`q`) alongside so a later address edit invalidates the cache automatically.
+ * No revalidate: the client already has the point in state for this view.
+ */
+export async function cacheBookingGeo(input: {
+  tripSlug: string; bookingId: string; lat: number; lng: number; q: string
+}): Promise<void> {
+  const { tripSlug, bookingId, lat, lng, q } = input
+  if (!tripSlug || !bookingId) return
+  if (!isFinite(lat) || !isFinite(lng)) return
+
+  const { trip } = await requireTripAccess(tripSlug)
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, tripId: trip.id },
+    select: { id: true, metadata: true },
+  })
+  if (!booking) return
+
+  const meta = safeJson<Record<string, unknown>>(booking.metadata) ?? {}
+  meta.geo = { lat, lng, q }
+  await prisma.booking.update({
+    where: { id: booking.id },
+    data: { metadata: JSON.stringify(meta) },
+  })
+}
+
 // ----- Manual payment + checklist add -----------------------------------------------
 
 export type AddPaymentResult = { ok: true } | { ok: false; error: string }
@@ -2006,6 +2038,25 @@ export async function editBooking(formData: FormData): Promise<EditBookingResult
     if (checkOut) newMeta.checkOut = checkOut
     if (breakfast) newMeta.breakfast = breakfast
   }
+  // Flight-specific metadata — these power live status (flightNumber + airport
+  // codes especially). Only touched when this is a flight; an emptied field
+  // clears the key so a removed gate/seat doesn't linger.
+  if (type === 'flight') {
+    const flightFields: Record<string, string> = {
+      flightNumber: String(formData.get('flightNumber') ?? '').trim().toUpperCase().replace(/\s+/g, ''),
+      airline: String(formData.get('airline') ?? '').trim(),
+      departureAirport: String(formData.get('departureAirport') ?? '').trim().toUpperCase(),
+      arrivalAirport: String(formData.get('arrivalAirport') ?? '').trim().toUpperCase(),
+      terminal: String(formData.get('terminal') ?? '').trim(),
+      gate: String(formData.get('gate') ?? '').trim(),
+      seat: String(formData.get('seat') ?? '').trim().toUpperCase(),
+      cabin: String(formData.get('cabin') ?? '').trim(),
+    }
+    for (const [k, v] of Object.entries(flightFields)) {
+      if (v) newMeta[k] = v
+      else delete newMeta[k]
+    }
+  }
 
   await prisma.booking.update({
     where: { id },
@@ -2194,6 +2245,113 @@ export async function deletePayment(formData: FormData) {
   await requireTripAccess(tripSlug)
   await prisma.payment.deleteMany({ where: { id, trip: { slug: tripSlug } } })
   revalidatePath(`/trips/${tripSlug}`, 'layout')
+}
+
+/**
+ * Mark a scheduled payment paid / unpaid. Lets the traveller clear an "action
+ * needed" item straight from the Costs page (the #2 payments complaint — you
+ * could see the pill but couldn't act on it). Stamps paidAt on the way in and
+ * clears it on undo so the calendar/ledger reflect reality. Scoped by trip via
+ * the relation filter so a member can't flip another trip's payment by id.
+ */
+export async function setPaymentPaid(formData: FormData) {
+  const id = String(formData.get('id') ?? '')
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  const paid = String(formData.get('paid') ?? '') === 'true'
+  if (!id || !tripSlug) return
+  await requireTripAccess(tripSlug)
+  await prisma.payment.updateMany({
+    where: { id, trip: { slug: tripSlug } },
+    data: { paid, paidAt: paid ? new Date() : null },
+  })
+  revalidatePath(`/trips/${tripSlug}/costs`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+}
+
+/** Mark a booking paid / unpaid — same one-tap clearing as setPaymentPaid. */
+export async function setBookingPaid(formData: FormData) {
+  const id = String(formData.get('id') ?? '')
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  const paid = String(formData.get('paid') ?? '') === 'true'
+  if (!id || !tripSlug) return
+  await requireTripAccess(tripSlug)
+  await prisma.booking.updateMany({
+    where: { id, trip: { slug: tripSlug } },
+    data: { paid, paidAt: paid ? new Date() : null },
+  })
+  revalidatePath(`/trips/${tripSlug}/costs`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+}
+
+// ----- Cancellation terms -----------------------------------------------------------
+
+export type CancellationTermsResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Amend (or add) a booking's cancellation terms straight from the Cancellations
+ * calendar. The parser seeds cancelByAt + cancellationPolicy from confirmation
+ * emails, but those are often vague or missing — so travellers can set the
+ * free-cancel deadline, a one-line policy summary, and the refund position
+ * themselves. Refund amount/currency and the non-refundable flag live in the
+ * booking's metadata JSON (no schema migration); the deadline and policy use
+ * the dedicated columns. Trip-scoped on read AND write so a member can't touch
+ * another trip's booking by guessing its id.
+ */
+export async function setCancellationTerms(formData: FormData): Promise<CancellationTermsResult> {
+  const id = String(formData.get('id') ?? '')
+  const tripSlug = String(formData.get('tripSlug') ?? '')
+  if (!id || !tripSlug) return { ok: false, error: 'Missing booking.' }
+  await requireTripAccess(tripSlug)
+
+  // Confirm the booking belongs to this trip and grab its metadata to merge.
+  const existing = await prisma.booking.findFirst({
+    where: { id, trip: { slug: tripSlug } },
+    select: { metadata: true },
+  })
+  if (!existing) return { ok: false, error: 'Booking not found.' }
+
+  const cancelDateStr = String(formData.get('cancelDate') ?? '').trim()
+  const cancelTimeStr = String(formData.get('cancelTime') ?? '').trim() || '23:59'
+  const cancellationPolicy = String(formData.get('cancellationPolicy') ?? '').trim() || null
+  const refundStr = String(formData.get('refundAmount') ?? '').trim()
+  const refundCurrency = String(formData.get('refundCurrency') ?? '').trim().toUpperCase() || null
+  const nonRefundable = String(formData.get('nonRefundable') ?? '') === 'on'
+
+  let cancelByAt: Date | null = null
+  if (cancelDateStr) {
+    cancelByAt = new Date(`${cancelDateStr}T${cancelTimeStr}:00Z`)
+    if (isNaN(cancelByAt.getTime())) return { ok: false, error: 'Invalid cancellation date.' }
+  }
+
+  // Merge refund position into metadata. Non-refundable wins and clears any
+  // stale refund figure; otherwise an explicit amount is stored (with currency),
+  // and an empty amount removes the cached figure entirely.
+  const meta = parseMeta(existing.metadata)
+  delete meta.refundAmount
+  delete meta.refundCurrency
+  delete meta.nonRefundable
+  if (nonRefundable) {
+    meta.nonRefundable = true
+  } else if (refundStr) {
+    const n = parseFloat(refundStr)
+    if (isNaN(n) || n < 0) return { ok: false, error: 'Enter a valid refund amount.' }
+    meta.refundAmount = n
+    if (refundCurrency) meta.refundCurrency = refundCurrency
+  }
+
+  await prisma.booking.updateMany({
+    where: { id, trip: { slug: tripSlug } },
+    data: {
+      cancelByAt,
+      cancellationPolicy,
+      metadata: Object.keys(meta).length > 0 ? JSON.stringify(meta) : null,
+    },
+  })
+
+  revalidatePath(`/trips/${tripSlug}/cancellations`)
+  revalidatePath(`/trips/${tripSlug}/costs`)
+  revalidatePath(`/trips/${tripSlug}`, 'layout')
+  return { ok: true }
 }
 
 // ----- Sharing / invitations --------------------------------------------------------

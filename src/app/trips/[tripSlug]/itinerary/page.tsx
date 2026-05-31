@@ -21,9 +21,11 @@ import { bookingLinkFor } from '@/lib/affiliates'
 import {
   planForDay, SESSIONS, SESSION_LABEL, formatTime,
   hotelOrderForTrip, sleepingTonightFor, getPalette, colorForHotel, colorForCity,
-  cleanHotelName, cityForBooking, cityOrderForTrip,
+  cleanHotelName, cityForBooking, cityOrderForTrip, dayPos,
   type DayPlan, type Session, type SessionItem, type ParsedTime, type PaletteSpec,
 } from '@/lib/itinerary'
+import { geocodeQuery } from '@/lib/geocode'
+import { DayMapClient, type DayMapStop } from '@/components/DayMapClient'
 import { mapRowsToSkeleton, cityForDate, citiesInOrder } from '@/lib/skeleton'
 import { computePlanBudget } from '@/lib/budget'
 import { PlanBudgetBar } from '@/components/PlanBudgetBar'
@@ -96,6 +98,64 @@ function typeLabelFor(type: string): string {
   if (type === 'car')        return 'Car'
   if (type === 'hotel')      return 'Hotel'
   return type.charAt(0).toUpperCase() + type.slice(1)
+}
+
+/** Short label for a map stop's legend entry. */
+function mapStopLabel(b: Booking): string {
+  return b.type === 'hotel' ? cleanHotelName(b.title) : b.title
+}
+
+// Types that represent a *place you go* during the day. Transport (flights,
+// transit, car) is excluded — it clutters the day map and rarely geocodes to a
+// useful point — so the map stays about where you'll actually be.
+const MAP_STOP_TYPES = new Set(['hotel', 'activity', 'restaurant', 'other'])
+
+/**
+ * The day's locatable stops, in time order, for the mini-map. Mirrors
+ * planForDay's inclusion rules (hotels anchor every covered day; activities can
+ * span; one-off places show on their own day) and reuses any coordinates we've
+ * already cached on the booking's metadata so resolved days render instantly.
+ */
+function dayStops(day: Date, bookings: readonly Booking[], country: string | null): DayMapStop[] {
+  type Row = { booking: Booking; sortMin: number; query: string }
+  const rows: Row[] = []
+  const seen = new Set<string>()
+
+  for (const b of bookings) {
+    if (!MAP_STOP_TYPES.has(b.type)) continue
+    const pos = dayPos(day, b)
+    if (pos === 'before' || pos === 'after') continue
+    // Point-in-time places (restaurant/other) only show on their own day;
+    // hotels and activities legitimately recur across the days they cover.
+    if (b.type !== 'hotel' && b.type !== 'activity' && (pos === 'middle' || pos === 'last')) continue
+    if (seen.has(b.id)) continue
+    const query = geocodeQuery({ address: b.address, location: b.location, title: b.title, country })
+    if (!query) continue
+    seen.add(b.id)
+    rows.push({
+      booking: b,
+      sortMin: b.startAt.getUTCHours() * 60 + b.startAt.getUTCMinutes(),
+      query,
+    })
+  }
+
+  rows.sort((a, b) => a.sortMin - b.sortMin)
+
+  return rows.map((r, i) => {
+    const geo = (safeJson<{ geo?: { lat: number; lng: number; q?: string } }>(r.booking.metadata) ?? {}).geo
+    const point =
+      geo && typeof geo.lat === 'number' && typeof geo.lng === 'number' && (geo.q == null || geo.q === r.query)
+        ? { lat: geo.lat, lng: geo.lng }
+        : null
+    return {
+      bookingId: r.booking.id,
+      n: i + 1,
+      label: mapStopLabel(r.booking),
+      kind: r.booking.type,
+      query: r.query,
+      point,
+    }
+  })
 }
 
 export default async function ItineraryPage({ params }: { params: Promise<{ tripSlug: string }> }) {
@@ -268,6 +328,13 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
                 ? cityForDate(skeleton.stops, day, trip.endDate)
                 : null
               const plannedColor = plannedCity ? colorForCity(plannedCity, cityOrder, palette) : null
+              // Locatable stops for this day's mini-map, in visit order. Country
+              // hint helps geocoding disambiguate (e.g. Queenstown NZ vs ZA).
+              const stops = dayStops(
+                day,
+                trip.bookings,
+                destProfile.label && destProfile.label !== 'Unknown' ? destProfile.label : null,
+              )
               return (
                 <DayBlock
                   key={dateKey}
@@ -283,6 +350,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
                   plannedCity={plannedCity}
                   plannedColor={plannedColor}
                   paletteTextColor={palette.textOnColor}
+                  stops={stops}
                 />
               )
             })}
@@ -298,7 +366,7 @@ export default async function ItineraryPage({ params }: { params: Promise<{ trip
 // ============================================================================
 
 function DayBlock({
-  day, dateKey, idx, isToday, plan, tripSlug, homeCurrency, sleepingTonight, hotelColor, plannedCity, plannedColor, paletteTextColor,
+  day, dateKey, idx, isToday, plan, tripSlug, homeCurrency, sleepingTonight, hotelColor, plannedCity, plannedColor, paletteTextColor, stops,
 }: {
   day: Date
   dateKey: string
@@ -312,6 +380,7 @@ function DayBlock({
   plannedCity: string | null
   plannedColor: string | null
   paletteTextColor: string
+  stops: DayMapStop[]
 }) {
   // Show "Reimagine day" only when this day actually renders AI suggestions.
   const dayHasSuggestions = SESSIONS.some((s) =>
@@ -367,6 +436,10 @@ function DayBlock({
           No accommodation tonight
         </div>
       )}
+
+      {/* Day mini-map — numbered stops in visit order, tap to open the route in
+          Google Maps. Renders nothing if the day has no locatable stops. */}
+      {stops.length > 0 && <DayMapClient tripSlug={tripSlug} stops={stops} />}
 
       <div className="space-y-6">
         {SESSIONS.map((session) => (

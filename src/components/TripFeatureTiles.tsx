@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import {
-  CalendarDays, Wallet, CloudSun, Globe2, Folder, ListChecks,
+  CalendarDays, Wallet, CalendarX2, CloudSun, Globe2, Folder, ListChecks,
   Mail, Settings as SettingsIcon, Plus,
 } from 'lucide-react'
 
@@ -12,8 +12,8 @@ import {
  * tighter than the original though:
  *
  *  - 5 columns wide on desktop, 2 rows tall = 10 tile slots
- *  - 8 real features, 2 placeholders so the row reads as a deliberate
- *    composition (and leaves slots for future features to slip into)
+ *  - 9 real features, 1 placeholder so the row reads as a deliberate
+ *    composition (and leaves a slot for a future feature to slip into)
  *  - Icon backdrop bumped from w-11 → w-12 mobile / w-12 → w-14 desktop,
  *    and the glyph itself from w-5 → w-6 mobile / w-6 → w-7 desktop, so
  *    the "picture" inside each white card reads a touch more present
@@ -40,6 +40,7 @@ export function TripFeatureTiles({
   itineraryPreview,
   costsPreview,
   costsPct,
+  cancellationsPreview,
   weatherPreview,
   localPreview,
   documentsPreview,
@@ -52,6 +53,7 @@ export function TripFeatureTiles({
   itineraryPreview: string
   costsPreview: string
   costsPct: number
+  cancellationsPreview: string
   weatherPreview: string
   localPreview: string
   documentsPreview: string
@@ -77,6 +79,14 @@ export function TripFeatureTiles({
       tintBg: 'rgba(110, 58, 40, 0.10)',    // Burnt sienna
       tintFg: '#6E3A28',
       progressPct: costsPct,
+    },
+    {
+      href: `/trips/${tripSlug}/cancellations`,
+      label: 'Cancellations',
+      preview: cancellationsPreview,
+      Icon: CalendarX2,
+      tintBg: 'rgba(122, 47, 61, 0.12)',    // Wine
+      tintFg: '#7A2F3D',
     },
     {
       href: `/trips/${tripSlug}/weather`,

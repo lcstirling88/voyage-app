@@ -41,6 +41,14 @@ type Initial = {
   checkIn: string
   checkOut: string
   breakfast: string
+  flightNumber: string
+  airline: string
+  departureAirport: string
+  arrivalAirport: string
+  terminal: string
+  gate: string
+  seat: string
+  cabin: string
 }
 
 export function BookingEditFormClient({ initial }: { initial: Initial }) {
@@ -74,6 +82,7 @@ export function BookingEditFormClient({ initial }: { initial: Initial }) {
   }
 
   const isHotel = type === 'hotel'
+  const isFlight = type === 'flight'
 
   return (
     <form onSubmit={save} className="space-y-6">
@@ -170,6 +179,49 @@ export function BookingEditFormClient({ initial }: { initial: Initial }) {
             <div>
               <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Breakfast</label>
               <input name="breakfast" defaultValue={initial.breakfast} className="input mt-1.5" placeholder="Included / Extra / —" />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {isFlight && (
+        <section className="border border-line rounded-xl bg-paper/50 p-5">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-ink-muted mb-1">Flight details</div>
+          <p className="text-[11px] text-ink-muted mb-3">
+            The flight number plus airport codes power live delay &amp; cancellation tracking on the day you fly.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Flight no.</label>
+              <input name="flightNumber" defaultValue={initial.flightNumber} className="input mt-1.5 num-mono" placeholder="QF25" />
+            </div>
+            <div className="col-span-1 sm:col-span-3">
+              <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Airline</label>
+              <input name="airline" defaultValue={initial.airline} className="input mt-1.5" placeholder="Qantas" />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">From (code)</label>
+              <input name="departureAirport" defaultValue={initial.departureAirport} className="input mt-1.5 num-mono" placeholder="SYD" maxLength={4} />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">To (code)</label>
+              <input name="arrivalAirport" defaultValue={initial.arrivalAirport} className="input mt-1.5 num-mono" placeholder="HND" maxLength={4} />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Terminal</label>
+              <input name="terminal" defaultValue={initial.terminal} className="input mt-1.5" placeholder="1" />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Gate</label>
+              <input name="gate" defaultValue={initial.gate} className="input mt-1.5" placeholder="B12" />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Seat</label>
+              <input name="seat" defaultValue={initial.seat} className="input mt-1.5 num-mono" placeholder="32A" />
+            </div>
+            <div className="col-span-1 sm:col-span-3">
+              <label className="text-[10px] uppercase tracking-[0.2em] text-ink-muted">Cabin / class</label>
+              <input name="cabin" defaultValue={initial.cabin} className="input mt-1.5" placeholder="Economy" />
             </div>
           </div>
         </section>

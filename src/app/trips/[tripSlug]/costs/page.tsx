@@ -1,10 +1,13 @@
 import { notFound } from 'next/navigation'
-import { Check, Clock, AlertCircle, Zap } from 'lucide-react'
+import Link from 'next/link'
+import { Check, Clock, Zap, CalendarX2, ArrowRight } from 'lucide-react'
 import { prisma } from '@/lib/db'
 import { fmtDate, fmtMoney } from '@/lib/format'
-import { startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, getDay, differenceInDays } from 'date-fns'
+import { differenceInDays } from 'date-fns'
 import { InlineDeleteButton } from '@/components/InlineDeleteButton'
 import { AddPaymentFormClient } from '@/components/AddPaymentFormClient'
+import { MarkPaidButton } from '@/components/MarkPaidButton'
+import { PaymentCalendarClient, type MoneyEvent } from '@/components/PaymentCalendarClient'
 import { computePlanBudget, bookingPartyCost, isCommittedStatus } from '@/lib/budget'
 import { currencySymbol } from '@/lib/destinations'
 
@@ -74,13 +77,83 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
     segVars['--seg4'] = '100%'
   }
 
-  // Calendar for the month of the next payment (or trip month)
-  const monthDate = trip.payments.find((p) => !p.paid)?.dueDate ?? trip.startDate
-  const monthStart = startOfMonth(monthDate)
-  const monthEnd = endOfMonth(monthDate)
-  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd })
-  const firstDow = getDay(monthStart) // 0=Sun
-  const leadingBlanks = (firstDow + 6) % 7 // make Monday = 0
+  // ---- Payment calendar / ledger model -------------------------------------
+  // Two money sources feed one timeline: scheduled Payments (deposits, balances,
+  // auto-charges) and confirmed bookings that still need paying. Smart dates
+  // retire the old blanket "TBC": pay-on-arrival items land on their check-in
+  // date, and a paid item with no recorded paid-date falls back to the date in
+  // the email (its own startAt) rather than when it was forwarded into the app.
+  const isoDay = (d: Date) => d.toISOString().slice(0, 10)
+  const todayISO = isoDay(new Date())
+  const [ty, tm] = todayISO.split('-').map(Number)
+
+  const venueLike = (m?: string | null) =>
+    !!m && /venue|on arrival|at hotel|at property|at the hotel|reception|pay later|check[- ]?in/i.test(m)
+
+  // Best date + state + human "what's required" for one booking.
+  type PayInfo = { date: Date; state: 'paid' | 'action'; detail: string; qualifier: string | null }
+  const bookingPayInfo = (b: (typeof committedBookings)[number]): PayInfo => {
+    if (b.paid) {
+      return {
+        date: b.paidAt ?? b.startAt,
+        state: 'paid',
+        detail: b.paymentMethod ? `Paid · ${b.paymentMethod}` : 'Paid',
+        qualifier: b.paidAt ? null : 'from booking',
+      }
+    }
+    if (venueLike(b.paymentMethod)) {
+      return { date: b.startAt, state: 'action', detail: b.paymentMethod || 'Pay at venue on arrival', qualifier: 'at venue' }
+    }
+    return {
+      date: b.startAt,
+      state: 'action',
+      detail: b.paymentMethod ? `Pay via ${b.paymentMethod}` : 'Not yet marked paid',
+      qualifier: 'due',
+    }
+  }
+
+  // Events plotted on the calendar: every scheduled payment, plus confirmed
+  // (status 'booked') bookings that aren't paid yet. Estimates (planned ideas)
+  // are left off — they're not money you owe yet.
+  const calEvents: MoneyEvent[] = []
+  for (const p of trip.payments) {
+    const state: MoneyEvent['state'] = p.paid ? 'paid' : p.autoPay ? 'auto' : 'action'
+    calEvents.push({
+      id: p.id,
+      kind: 'payment',
+      label: p.description,
+      dateISO: isoDay(p.dueDate),
+      dateLabel: fmtDate(p.dueDate, 'd MMM'),
+      amountLabel: fmtMoney(p.amount, p.currency),
+      compactAmount: compactMoney(p.amount, p.currency),
+      state,
+      paid: p.paid,
+      detail: p.paid
+        ? (p.paymentMethod ? `Paid · ${p.paymentMethod}` : 'Paid')
+        : p.autoPay
+          ? `Auto-charge${p.paymentMethod ? ` · ${p.paymentMethod}` : ''}`
+          : (p.paymentMethod ? `Pay via ${p.paymentMethod}` : 'Manual payment due'),
+    })
+  }
+  for (const b of committedBookings) {
+    if (b.paid || b.status !== 'booked') continue
+    const amt = bookingPartyCost(b, pax)
+    if (amt <= 0) continue
+    const cur = b.currency ?? trip.homeCurrency
+    const info = bookingPayInfo(b)
+    calEvents.push({
+      id: b.id,
+      kind: 'booking',
+      label: b.title,
+      dateISO: isoDay(info.date),
+      dateLabel: fmtDate(info.date, 'd MMM'),
+      amountLabel: fmtMoney(amt, cur),
+      compactAmount: compactMoney(amt, cur),
+      state: 'action',
+      paid: false,
+      detail: info.detail,
+    })
+  }
 
   return (
     <>
@@ -156,50 +229,21 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
           </div>
 
           <div className="lg:col-span-2 border border-line rounded-xl bg-paper-pure p-5 sm:p-6">
-            <div className="flex items-baseline justify-between mb-1">
-              <h3 className="font-display text-2xl">Payment calendar</h3>
-              <div className="flex items-center gap-2 text-xs text-ink-muted">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sage" />Paid</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gold" />Auto</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rust" />Action</span>
-              </div>
-            </div>
-            <p className="text-xs text-ink-muted mb-5">{fmtDate(monthStart, 'MMMM yyyy')}</p>
-            <div className="grid grid-cols-7 gap-1 text-xs text-ink-muted mb-2">
-              {['M','T','W','T','F','S','S'].map((d, i) => <div key={i} className="text-center">{d}</div>)}
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-              {Array.from({ length: leadingBlanks }).map((_, i) => (
-                <div key={`blank-${i}`} className="aspect-square rounded-md border border-line/40 bg-paper/30" />
-              ))}
-              {monthDays.map((d) => {
-                const due = trip.payments.find((p) => isSameDay(p.dueDate, d))
-                const cls = due
-                  ? due.autoPay ? 'border-2 border-gold bg-gold-soft' : 'border-2 border-rust bg-sakura-soft'
-                  : 'border border-line/40'
-                return (
-                  <div key={d.toISOString()} className={`aspect-square rounded-md p-1.5 text-xs relative ${cls}`}>
-                    {d.getDate()}
-                    {due && (
-                      <span className={`absolute bottom-1 right-1 num-mono text-[9px] ${due.autoPay ? 'text-gold' : 'text-rust'}`}>
-                        {compactMoney(due.amount, due.currency)}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            <div className="mt-6 space-y-2">
-              <div className="text-xs text-ink-muted">Upcoming</div>
-              {trip.payments.filter((p) => !p.paid).map((p) => (
-                <div key={p.id} className="flex items-center gap-3 text-sm p-2 hover:bg-line-soft rounded">
-                  <span className={`w-2 h-2 rounded-full ${p.autoPay ? 'bg-gold' : 'bg-rust'}`} />
-                  <span className="flex-1">{p.description}</span>
-                  <span className="text-ink-muted text-xs">{fmtDate(p.dueDate)}</span>
-                  <span className="num-mono">{fmtMoney(p.amount, p.currency)}</span>
-                </div>
-              ))}
+            <PaymentCalendarClient
+              events={calEvents}
+              todayISO={todayISO}
+              initialYear={ty}
+              initialMonth={tm - 1}
+              tripSlug={trip.slug}
+            />
+            <div className="mt-5 pt-4 border-t border-line">
+              <Link
+                href={`/trips/${trip.slug}/cancellations`}
+                className="inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink transition"
+              >
+                <CalendarX2 className="w-3.5 h-3.5" /> Cancellation deadlines &amp; refunds
+                <ArrowRight className="w-3 h-3" />
+              </Link>
             </div>
           </div>
         </div>
@@ -231,9 +275,14 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
                   No transactions yet. Forward booking emails to your trip inbox and they&apos;ll appear here.
                 </td></tr>
               )}
-              {committedBookings.slice().sort((a, b) => (a.paidAt?.getTime() ?? a.startAt.getTime()) - (b.paidAt?.getTime() ?? b.startAt.getTime())).map((b) => (
+              {committedBookings.slice().sort((a, b) => (a.paidAt?.getTime() ?? a.startAt.getTime()) - (b.paidAt?.getTime() ?? b.startAt.getTime())).map((b) => {
+                const info = bookingPayInfo(b)
+                return (
                 <tr key={b.id} className="hover:bg-line-soft/40">
-                  <td className="px-6 py-3 num-mono text-ink-muted">{b.paidAt ? fmtDate(b.paidAt) : 'TBC'}</td>
+                  <td className="px-6 py-3 num-mono text-ink-muted whitespace-nowrap">
+                    {fmtDate(info.date)}
+                    {info.qualifier && <span className="text-[10px] text-ink-muted/60 ml-1">{info.qualifier}</span>}
+                  </td>
                   <td className="px-6 py-3">{b.title}</td>
                   <td className="px-6 py-3 text-ink-muted">{b.type}</td>
                   <td className="px-6 py-3 text-right num-mono">
@@ -249,14 +298,16 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
                       ) : (
                         <span className="pill pill-upcoming"><Clock className="w-3 h-3" />Pending</span>
                       )}
+                      {b.status === 'booked' && <MarkPaidButton kind="booking" id={b.id} tripSlug={trip.slug} paid={b.paid} />}
                       <InlineDeleteButton kind="booking" id={b.id} tripSlug={trip.slug} />
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
               {trip.payments.map((p) => (
-                <tr key={p.id} className={`hover:bg-line-soft/40 ${p.autoPay ? 'bg-gold-soft/20' : 'bg-sakura-soft/20'}`}>
-                  <td className="px-6 py-3 num-mono text-ink-muted">{fmtDate(p.dueDate)}</td>
+                <tr key={p.id} className={`hover:bg-line-soft/40 ${p.paid ? 'bg-sage-soft/20' : p.autoPay ? 'bg-gold-soft/20' : 'bg-sakura-soft/20'}`}>
+                  <td className="px-6 py-3 num-mono text-ink-muted whitespace-nowrap">{fmtDate(p.paid && p.paidAt ? p.paidAt : p.dueDate)}</td>
                   <td className="px-6 py-3 font-medium">{p.description}</td>
                   <td className="px-6 py-3 text-ink-muted">Scheduled</td>
                   <td className="px-6 py-3 text-right num-mono">{fmtMoney(p.amount, p.currency)}</td>
@@ -265,10 +316,11 @@ export default async function CostsPage({ params }: { params: Promise<{ tripSlug
                       {p.paid ? (
                         <span className="pill pill-paid"><Check className="w-3 h-3" />Paid</span>
                       ) : p.autoPay ? (
-                        <span className="pill pill-auto"><Zap className="w-3 h-3" />Auto · {p.paymentMethod}</span>
+                        <span className="pill pill-auto"><Zap className="w-3 h-3" />Auto{p.paymentMethod ? ` · ${p.paymentMethod}` : ''}</span>
                       ) : (
-                        <span className="pill pill-overdue"><AlertCircle className="w-3 h-3" />Action needed</span>
+                        <span className="pill pill-upcoming"><Clock className="w-3 h-3" />Due</span>
                       )}
+                      <MarkPaidButton kind="payment" id={p.id} tripSlug={trip.slug} paid={p.paid} />
                       <InlineDeleteButton kind="payment" id={p.id} tripSlug={trip.slug} />
                     </div>
                   </td>
